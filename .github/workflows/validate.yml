@@ -1,0 +1,39 @@
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The feedback loop can auto-merge PRs that touch prompts/ and docs/.
+# These checks are what make that safe, so they run on every PR without exception.
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Privacy gate
+        # Highest-consequence check: this repository is public. Runs first so a
+        # leak fails the build before anything else has a chance to pass.
+        # In CI the local profile is absent, so this is the structural +
+        # generic-secret layer only.
+        run: python scripts/leakcheck.py
+
+      - name: Config and index validation
+        run: python scripts/validate.py
+
+      - name: Tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Question spec is still evidence-based
+        # The corpus is gitignored, so this is informational in CI. It fails the
+        # build only if the script itself is broken.
+        run: python scripts/measure_corpus.py || test $? -eq 2

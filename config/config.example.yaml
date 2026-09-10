@@ -1,0 +1,28 @@
+# Copy to config/config.local.yaml and fill in. The .local file is gitignored.
+#   cp config/config.example.yaml config/config.local.yaml
+
+slack:
+  # Channel that carries digest, quiz, results and feedback.
+  channel_id: "C0XXXXXXXXX"
+  channel_name: "#gcp-security-exam"
+  # The learner's Slack user id. Grading counts only THIS user's reactions,
+  # ignoring the bot's own pre-seeded option emoji.
+  user_id: "U0XXXXXXXXX"
+
+notion:
+  # Root page whose children are courses.
+  root_page_id: "00000000000000000000000000000000"
+  # Databases the system writes to. Leave blank on first run; sync-notion
+  # creates them and writes the ids back.
+  quiz_results_db: ""
+  daily_digests_db: ""
+
+github:
+  repo: "owner/repo"
+  # A PR may auto-merge only if it satisfies every condition in
+  # docs/feedback-sdlc.md. Set false to always require human review.
+  auto_merge_trivial: true
+
+dashboard:
+  # Stable artifact URL, republished after each grading. Blank until first publish.
+  url: ""

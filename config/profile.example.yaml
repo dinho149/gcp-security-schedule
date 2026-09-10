@@ -1,0 +1,53 @@
+# Copy to profile.local.yaml and fill in. The .local file is gitignored because
+# this repository is public.
+#   cp config/profile.example.yaml profile.local.yaml
+#
+# This file is why the system doesn't waste the reader's time. It is read before
+# every digest and quiz.
+
+# Hard-blocked strings. scripts/leakcheck.py fails the build if any appears in a
+# tracked file. Put your employer name, your full name, any workspace slug here.
+sensitive_terms:
+  - "<employer name>"
+  - "<your full name>"
+
+identity:
+  name: "<first name>"
+  role: "<job title>"
+  context: "<one line: team, scope, who you report to>"
+  timezone: "Europe/London"
+  certifications: []
+  target: Google Cloud Professional Cloud Security Engineer
+
+# NEVER define or introduce these. Reference them as shared vocabulary.
+# Group them however you like; every list is flattened.
+assume_known:
+  security_fundamentals: []
+  appsec: []
+  containers: []
+  identity: []
+  crypto: []
+  operations: []
+  compliance: []
+  # Appended automatically by the 🥱 reaction and `!known <topic>`.
+  retired: []
+
+# What you are actually here to learn.
+learning: []
+
+# GCP concept -> a system YOU built. Far stronger recall hooks than generic AWS.
+# Used in digests and answer explanations, never in question stems.
+anchors:
+  # "Binary Authorization": "the image-signing rollout you did"
+
+# Where your existing cloud intuition actively misleads you on GCP.
+# Weighted UP in quiz sampling — these are the marks you'd really lose.
+aws_traps:
+  # - trap: "<the wrong belief>"
+  #   reality: "<what is actually true>"
+  #   blueprint: ["1.4"]
+
+teach_style:
+  - Peer-level. No tutorials, no definitions of known concepts.
+  - Lead with the delta, not the concept.
+  - Name the trap explicitly where one exists.
