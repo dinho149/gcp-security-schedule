@@ -24,23 +24,54 @@ explicitly the preparation for it: cover the topics the quiz will draw from.
 4. Pick 3–4 that hang together. A digest with a thesis beats a digest with
    coverage.
 
-## Structure
+## Structure — one message per topic
+
+The digest is a **sequence of Slack messages**, not one long post. Same shape the
+quiz uses, and for the same reason: threads collapse, so depth stays one click away.
 
 ```
-# ⚡ Digest · <date> · ⏱ <n> min
-> <square> **Today:** <the thesis, one line>
-_<why it matters for today's quiz>_
-───────────────────────────────
-## <square> 1 · <title>        ⏱ <n>s
-<content — different block shape each chunk>
-📖 <Page> → "<exact heading>"
-───────────────────────────────
-        [ diagram ]
-───────────────────────────────
-## ✅ Before the quiz you can say…
-☐ <checkable claim>
-🧵 _Thread: <what is in the thread>_
+parent      # ⚡ Digest · <date> · ⏱ <total>
+            > <square> **Today:** <thesis, one line>
+            _<why it matters for today's quiz>_
+            **1.** <square> <topic> · ⏱ <n>s
+            **2.** <square> <topic> · ⏱ <n>s   <- numbered agenda
+            ...
+
+topic 1..N  ## <square> <n> · <title>        ⏱ <n>s     (top-level message)
+            <content — a different block shape per topic>
+            📖 <Page> → "<exact heading>"
+            └─ thread: visual(s), then the deep dive
+
+closing     ## ✅ Before the quiz you can say…
+            ☐ <checkable claim>
 ```
+
+Each topic is self-contained: someone reading only that message should get the
+whole point. No "as we saw above".
+
+## Authoring visual specs
+
+Emit `state.local/history/<date>/visuals.json` as `{"visuals": [<spec>, ...]}`,
+then render it in one command (see the skill). Give each spec an `id` matching its
+topic, e.g. `topic-2-vpc-scope`.
+
+| Component | Use for |
+|---|---|
+| `compare` | GCP vs AWS, service A vs service B |
+| `chain` | resource hierarchy, inheritance |
+| `contrast` | an `aws_traps` entry — habit vs reality |
+| `sequence` | evaluation order, request path |
+| `decision` | "which option should you pick" |
+| `code` | annotated `gcloud` / Terraform |
+
+**One visual per topic minimum; two when the topic earns it** — typically a diagram
+plus an annotated command. **Never two of the same component in one digest**: four
+near-identical cards is the wall-of-text problem in picture form.
+
+Set `section` on each spec ("1".."5") so its accent colour matches the topic's square.
+
+If a topic cannot justify a visual, that is a signal the topic is too thin — merge
+it or cut it, rather than inventing filler.
 
 ## Rules
 

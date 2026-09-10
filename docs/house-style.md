@@ -68,12 +68,32 @@ the heading verbatim — it's ⌘F-able. The heading text must match
 
 Never cite a section whose `ingested` flag is false.
 
-## 6. Diagrams
+## 6. Visuals
 
-Each digest renders one diagram as a PNG and uploads it into the digest thread.
-This is the only way to get real imagery into Slack, and it's worth doing daily.
-Draw the thing that is structural that day — resource hierarchy, IAM evaluation
-order, VPC topology, log routing.
+The digest posts as **one message per topic**, each with its visual(s) in its own
+thread. Threads collapse, so a visual is available instantly but never in the way.
+
+Six components live in `dashboard/visuals.py`; `dashboard/render.py` turns a spec
+file into PNGs in one command.
+
+| Component | Shape | Use for |
+|---|---|---|
+| `compare` | 2–3 column card | GCP vs AWS, service A vs B |
+| `chain` | nested hierarchy with marks | hierarchy, inheritance |
+| `contrast` | ❌ habit / ✅ reality | an `aws_traps` entry |
+| `sequence` | numbered strip | evaluation order, request path |
+| `decision` | branching tree | "which option" |
+| `code` | annotated snippet | `gcloud` / Terraform |
+
+**Rules**
+
+- One visual per topic minimum; two when the topic earns it.
+- **Never two of the same component in one digest.** Four lookalike cards is the
+  wall-of-text problem in picture form.
+- Set `section` on the spec so its accent matches the topic's colour square.
+- A topic that cannot justify a visual is too thin — merge or cut it.
+- The renderer refuses to emit a clipped image. Fix the spec rather than shipping
+  a truncated one.
 
 ## 7. Worked example
 

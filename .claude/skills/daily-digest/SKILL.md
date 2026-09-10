@@ -17,21 +17,44 @@ file covers the mechanics.
 3. Read `state.local/mastery.json` for what is weak or due.
 4. Pick topics, weighting `aws_traps` up.
 
-## Diagram
+## Visuals
 
-Render one PNG per digest and upload it into the digest thread —
-`slack_get_file_upload_url` then `slack_complete_file_upload`. This is the only
-route to real imagery in Slack and it is worth doing every day.
+Write every visual for the day into one spec file, then render them in a single
+command:
 
-Draw whatever is structural that day: resource hierarchy, IAM evaluation order,
-VPC topology, log routing. If nothing is structural, the topic choice is probably
-too thin.
+```bash
+.venv/bin/python dashboard/render.py state.local/history/<date>/visuals.json
+# -> state.local/history/<date>/visuals/<id>.png
+```
 
-## Post
+`dashboard/visuals.py` holds six components (`compare`, `chain`, `contrast`,
+`sequence`, `decision`, `code`) and their demo specs, which double as fixtures.
+`.venv/bin/python dashboard/visuals.py --demo-specs` prints a working example of
+each.
 
-1. Main message to `config.local.yaml` → `slack.channel_id`.
-2. Deep dives as thread replies — progressive disclosure, never inline.
-3. Diagram uploaded into the thread.
+**One visual per topic minimum, two when the topic earns it. Never repeat a
+component within one digest.**
+
+The renderer **fails loudly if a visual would be clipped** — it detects content
+reaching the canvas edge via the sentinel border. Fix the spec (shorter text, or a
+wider `width`); do not post a truncated diagram.
+
+Rendering takes ~2s per visual and needs no browser session, so it runs unattended.
+
+## Post — a sequence, not one message
+
+1. **Parent**: hook, thesis, ⏱ total, numbered agenda of the topics.
+2. **One top-level message per topic**, each ending in its Notion citation.
+3. **Into each topic's thread**: its visual(s), then the deep dive.
+   Upload with `slack_get_file_upload_url` → POST bytes → `slack_complete_file_upload`
+   with `thread_ts` set to that topic's message.
+4. **Closing message**: the pre-quiz checklist, which ends the run.
+
+Record every `message_ts` in `state.local/history/<date>/digest.json` so a later
+`!digest` on the same day can reference what was already covered.
+
+Threads are flat in Slack (`docs/decisions.md`), which is exactly why topics are
+top-level messages: a visual can only be collapsed under a top-level parent.
 
 ## Then
 

@@ -8,7 +8,13 @@ delivered to Slack.
 
 ## ⚠️ This repository is PUBLIC
 
-Never commit personal data. Before any commit:
+Never commit personal data. Install the pre-commit gate once per clone:
+
+```bash
+./scripts/install-hooks.sh     # blocks any commit that fails leakcheck
+```
+
+Run it directly any time:
 
 ```bash
 .venv/bin/python scripts/leakcheck.py

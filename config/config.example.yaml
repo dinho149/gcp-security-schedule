@@ -26,3 +26,7 @@ github:
 dashboard:
   # Stable artifact URL, republished after each grading. Blank until first publish.
   url: ""
+
+render:
+  # Headless Chrome renders digest visuals. Override if Chrome lives elsewhere.
+  chrome_path: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"

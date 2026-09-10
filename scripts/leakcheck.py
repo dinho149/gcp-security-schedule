@@ -45,8 +45,16 @@ GENERIC_SECRETS = [
     (re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"), "private key"),
 ]
 
-# Emails that are fine in a public repo.
-EMAIL_ALLOW = re.compile(r"users\.noreply\.github\.com$|@company\.com\b|@example\.(com|org)$")
+# Emails that are fine in a public repo: the git noreply address, documentation
+# placeholders, and Google service-account addresses (which are resource
+# identifiers in examples, not contact details).
+EMAIL_ALLOW = re.compile(
+    r"users\.noreply\.github\.com$"
+    r"|@company\.com\b"
+    r"|@example\.(com|org)\b"
+    r"|\.iam\.gserviceaccount\.com\b"
+    r"|@(proj|project|my-project)\."
+)
 
 MIN_PHRASE = 12  # shorter phrases produce false positives, not signal
 

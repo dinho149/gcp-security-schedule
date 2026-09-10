@@ -39,6 +39,46 @@ worth it until the friction proves real.
 
 ---
 
+## Digest visuals: headless Chrome, not the browser extension
+
+The first digest shipped as one long message with a single diagram, because
+producing that diagram took ~5 interactive browser-tool calls: write HTML, serve
+it on localhost, navigate, screenshot, guess a crop region. Four visuals a day
+would have been ~20 calls, and the digest is supposed to fire unattended at 07:15.
+
+**Two things made the scripted version possible.**
+
+The `file://` block that forced the localhost server was a *browser extension*
+restriction, not a Chrome one. Headless Chrome opens local files directly, so no
+server is needed.
+
+Chrome 152 is already installed, so `--headless --screenshot` gave a scriptable
+renderer with no new binary. Only Pillow was added, for cropping.
+
+`dashboard/render.py` now renders a whole digest's visuals in one command, about
+2s each.
+
+### Cropping to a sentinel, not to white
+
+Each component draws a magenta border that the cropper trims to. Cropping to white
+would silently eat any light-coloured element sitting at the edge.
+
+### The first clipping check was vacuous
+
+It asserted a clean white margin on all four sides. That passes almost always,
+because content rarely reaches the very edge — a deliberately clipped image passed
+it. Replaced with a real check: if the content bounding box touches a canvas edge,
+the page overflowed the render window and the run **fails** rather than posting a
+truncated diagram. Verified against a spec built to overflow.
+
+### Cropping in pure Python was the bottleneck
+
+A per-pixel loop over ~8M pixels took ~4.5s per image. `ImageChops.difference`
+against a solid sentinel plate does the same work natively: 28.7s → 14.1s for six
+visuals, and the output is pixel-identical.
+
+---
+
 ## Slack threads are flat, so questions are top-level messages
 
 The plan had each question as a thread reply under a quiz parent, with its AWS
