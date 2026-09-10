@@ -5,8 +5,8 @@ Grade the most recent ungraded quiz, explain what was missed, and update mastery
 ## Reading answers
 
 For each question message, call `slack_get_reactions`. Count **only** reactions
-from `config.local.yaml` → `slack.user_id`; the bot pre-seeds 1️⃣–4️⃣ so the raw
-counts are meaningless without that filter.
+from `config.local.yaml` → `slack.user_id` — the channel is public, and the
+connector itself posts as that same account, so nothing here may add reactions.
 
 - 1️⃣–4️⃣ → the answer. Two reactions on a `(choose two)` question is a complete answer.
 - 💡 → the AWS hint was used. Record it; the topic gets weighted for review.

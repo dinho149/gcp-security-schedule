@@ -54,9 +54,11 @@ strings.** If the material will not support a question, write a different one.
 
 ## Slack rendering
 
-Parent message, then one threaded reply per question. Pre-seed 1️⃣–4️⃣ reactions
-so answering is a tap. Grading counts only the learner's reactions, ignoring the
-seeds.
+Parent message, then one threaded reply per question.
+
+**Never add reactions to quiz messages.** The connector posts as the learner, so
+any reaction it adds is indistinguishable from an answer. Question messages go
+out clean.
 
 ```
 <square> Q<n> · §<blueprint> <subsection title>        ⏱ <n>s

@@ -11,9 +11,14 @@ Follow `prompts/grading.md` for wording. This file covers mechanics.
 
 For each question's `message_ts`, call `slack_get_reactions`.
 
-**Count only reactions from `config.local.yaml` → `slack.user_id`.** The bot
-pre-seeds 1️⃣–4️⃣, so raw counts are meaningless without that filter. This is the
-single easiest thing to get wrong here.
+**Count only reactions from `config.local.yaml` → `slack.user_id`.**
+
+Two reasons, and the second is the one that bites:
+
+1. The channel is public, so anyone in the workspace could react.
+2. The connector acts as the learner's own account. Anything the agent reacts
+   with is attributed to them — which is why `daily-quiz` never seeds option
+   emoji, and why nothing here may add reactions either.
 
 | Reaction | Meaning |
 |---|---|

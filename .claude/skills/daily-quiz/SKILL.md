@@ -25,9 +25,15 @@ ingested material.
 
 Parent message, then one threaded reply per question.
 
-Pre-seed 1️⃣–4️⃣ on every question message with `slack_add_reaction` so answering
-is a tap rather than an emoji hunt. Grading filters to `slack.user_id`, so the
-seeds do not corrupt the result.
+**Never add reactions to a quiz message.** The Slack connector acts as the
+learner's own account, not as a bot — a reaction it adds is attributed to
+`U0C1UME5GQG`, indistinguishable from a real answer. Pre-seeding 1️⃣–4️⃣ would
+post four answers under the learner's name and destroy the result.
+
+Verified empirically, not assumed: see `docs/decisions.md`.
+
+So question messages go out clean. The learner picks the number emoji themselves;
+after the first quiz these sit in Slack's frequently-used row and are one tap.
 
 Post the AWS hint as a **collapsed thread reply under each question**
 (`prompts/hint.md`). Slack hides thread replies by default, which makes it a
