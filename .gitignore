@@ -1,0 +1,44 @@
+# ─────────────────────────────────────────────────────────────
+# THIS REPOSITORY IS PUBLIC.
+#
+# Everything below is deliberately excluded because it contains
+# personal background, employer-specific detail, exam results,
+# or third-party content we should not republish.
+#
+# Do not remove entries here without re-reading docs/privacy.md.
+# CI enforces this list (scripts/leakcheck.py) on every PR,
+# including auto-merged ones.
+# ─────────────────────────────────────────────────────────────
+
+# Learner profile: background, assume-known list, employer anchor map
+profile.local.yaml
+
+# Local config: Slack channel + user ids, Notion page ids
+config/config.local.yaml
+
+# Anything following the *.local.* convention
+*.local.yaml
+*.local.json
+*.local.md
+
+# Derived from a private Notion workspace
+knowledge/
+
+# Google's sample questions — not ours to republish
+reference/exemplars/
+
+# Quiz history, results, mastery scores, feedback log
+state.local/
+
+# Generated artefacts
+dashboard/*.generated.html
+*.png
+*.pdf
+
+# Housekeeping
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env

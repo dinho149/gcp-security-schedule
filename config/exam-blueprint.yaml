@@ -1,0 +1,157 @@
+# Professional Cloud Security Engineer — exam blueprint
+# Transcribed verbatim from the exam guide in Notion:
+# https://app.notion.com/p/REDACTED-NOTION-PAGE-ID
+#
+# Weights drive quiz question sampling. They are renormalised over
+# whatever `knowledge/coverage.md` marks as covered, so a section you
+# have not studied yet contributes nothing until its material lands.
+
+exam: Professional Cloud Security Engineer
+source: https://app.notion.com/p/REDACTED-NOTION-PAGE-ID
+format:
+  questions: "50-60"
+  duration_minutes: 120
+  types: [single-select, multi-select]
+
+sections:
+  - id: "1"
+    title: Configuring access
+    weight: 25
+    square: "🟦"
+    subsections:
+      - id: "1.1"
+        title: Managing Cloud Identity
+        topics:
+          - Configuring Google Cloud Directory Sync and implementing SSO with a third-party identity provider
+          - Managing a super administrator account
+          - Automating the user lifecycle management process
+          - Administering user accounts and groups programmatically
+          - Configuring Workforce Identity Federation
+      - id: "1.2"
+        title: Managing service accounts
+        topics:
+          - Securing and protecting service accounts (including default service accounts)
+          - Identifying scenarios requiring service accounts
+          - Creating, disabling, and authorizing service accounts
+          - Securing, auditing, and mitigating the usage of service account keys
+          - Managing and creating short-lived credentials
+          - Configuring Workload Identity Federation
+          - Managing service account impersonation
+      - id: "1.3"
+        title: Managing authentication
+        topics:
+          - Creating a password and session management policy for user accounts
+          - Setting up SAML and OAuth
+          - Configuring and enforcing 2-step verification
+      - id: "1.4"
+        title: Managing and implementing authorization controls
+        topics:
+          - Managing privileged roles and separation of duties with IAM roles and permissions
+          - Managing IAM and ACL permissions
+          - Granting permissions to different types of identities using IAM conditions and IAM deny policies
+          - Defining access control at the organization, folder, project, and resource level using least privilege
+          - Configuring Access Context Manager
+          - Applying Policy Intelligence
+          - Managing permissions through groups
+          - Identifying use cases and configuring Privileged Access Manager
+      - id: "1.5"
+        title: Defining the resource hierarchy
+        topics:
+          - Managing folders and projects at scale
+          - Managing pre-built or custom organization policies for the organization, folders, and projects
+          - Using the resource hierarchy for access control and permissions inheritance
+
+  - id: "2"
+    title: Securing communications and establishing boundary protection
+    weight: 22
+    square: "🟩"
+    subsections:
+      - id: "2.1"
+        title: Designing and configuring perimeter security
+        topics:
+          - Configuring network perimeter controls (Cloud NGFW rules and policies, Identity-Aware Proxy, load balancers, Certificate Authority Service)
+          - Setting up application layer inspection on Cloud NGFW (layer 7)
+          - Differentiating between private and public IP addressing
+          - Configuring web application firewalls (Google Cloud Armor)
+          - Deploying Secure Web Proxy
+          - Configuring Cloud DNS security settings
+          - Continually monitoring and restricting configured APIs
+      - id: "2.2"
+        title: Configuring boundary segmentation
+        topics:
+          - Configuring security properties of a VPC network, VPC peering, Shared VPC, and firewall rules
+          - Configuring network isolation and data encapsulation for N-tier applications
+          - Identifying use cases and configuring VPC Service Controls
+      - id: "2.3"
+        title: Establishing private connectivity
+        topics:
+          - Designing and configuring private connectivity between VPC networks and Google Cloud projects (Shared VPC, VPC peering, Private Google Access for on-premises hosts)
+          - Designing and configuring private connectivity and encryption between data centers and VPC network (HA VPN, Cloud Interconnect)
+          - Establishing private connectivity between VPC and Google APIs (Private Google Access, restricted Google access, Private Service Connect)
+          - Using Cloud NAT to enable outbound traffic
+
+  - id: "3"
+    title: Ensuring data protection
+    weight: 23
+    square: "🟨"
+    subsections:
+      - id: "3.1"
+        title: Protecting sensitive data and preventing data loss
+        topics:
+          - Configuring Sensitive Data Protection (discovering and redacting PII, pseudonymization, format preserving encryption)
+          - Restricting access to Google Cloud data services (BigQuery, Cloud Storage, Cloud SQL)
+          - Securing secrets with Secret Manager
+          - Protecting and managing compute instance metadata
+      - id: "3.2"
+        title: Managing encryption at rest, in transit, and in use
+        topics:
+          - Identifying use cases for Google default encryption, CMEK, and Cloud External Key Manager (EKM)
+          - Determining when to use software and hardware keys
+          - Creating and managing encryption keys for CMEK and EKM (key rotation and revocation, key import)
+          - Applying encryption methods to various use cases
+          - Configuring object lifecycle policies for Cloud Storage
+          - Enabling Confidential Computing
+      - id: "3.3"
+        title: Securing AI workloads
+        topics:
+          - Implementing security and privacy controls for AI/ML systems to protect against unintentional exploitation of data or models
+          - Determining security requirements for IaaS-hosted and PaaS-hosted training models
+          - Implementing security controls for Gemini Enterprise Agent Platform
+
+  - id: "4"
+    title: Managing operations
+    weight: 19
+    square: "🟧"
+    subsections:
+      - id: "4.1"
+        title: Automating infrastructure and application security
+        topics:
+          - Automating security scanning for CVEs through a CI/CD pipeline
+          - Configuring Binary Authorization to secure GKE clusters or Cloud Run
+          - Automating virtual machine and container image creation (hardening, maintenance, VM patch management)
+          - Managing policy and drift detection at scale (cloud security posture management, custom organization policies, custom modules for Security Health Analytics)
+      - id: "4.2"
+        title: Configuring logging, monitoring, and detection
+        topics:
+          - Configuring and analyzing network logs (Cloud NGFW, VPC flow logs, Packet Mirroring, Cloud IDS, Log Analytics)
+          - Designing an effective logging strategy
+          - Logging, monitoring, responding to, and remediating security incidents
+          - Designing secure access to logs
+          - Exporting logs to external security systems
+          - Configuring and analyzing Google Cloud Audit Logs and data access logs
+          - Configuring log exports (log sinks and aggregated sinks)
+          - Configuring and monitoring Security Command Center
+
+  - id: "5"
+    title: Supporting compliance requirements
+    weight: 11
+    square: "🟥"
+    subsections:
+      - id: "5.1"
+        title: Adhering to regulatory and industry standards requirements for the cloud
+        topics:
+          - Determining technical needs relative to compute, data, network, and storage
+          - Evaluating the shared responsibility model
+          - Configuring security controls within cloud environments to support compliance requirements (Assured Workloads, organizational policies, Access Transparency, Access Approval, regionalization of data and services)
+          - Determining the Google Cloud environment in scope for regulatory compliance
+          - Mapping compliance requirements to Google Cloud services and security controls (network and access segmentation, audit log coverage)
