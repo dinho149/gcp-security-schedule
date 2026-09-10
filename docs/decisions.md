@@ -39,6 +39,22 @@ worth it until the friction proves real.
 
 ---
 
+## Slack threads are flat, so questions are top-level messages
+
+The plan had each question as a thread reply under a quiz parent, with its AWS
+hint as a collapsed reply *under that question*. Slack does not nest: a reply to
+a thread reply joins the same parent thread. The hint would have been visible
+inline, losing the spoiler property that made it worth posting up front.
+
+**Decision.** The quiz parent is one message; each question is its own top-level
+message; each hint is a thread reply under its question. Threads collapse by
+default, so the hint stays a deliberate click with no waiting, and reactions sit
+on top-level messages where they are easy to see and easy to add.
+
+Costs 11 messages a day in the channel. Worth it.
+
+---
+
 ## Multi-select questions use four options, not five
 
 **Found:** measuring all 20 official sample questions.
