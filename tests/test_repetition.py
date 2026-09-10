@@ -115,19 +115,78 @@ class TestQuizRepeatRules(unittest.TestCase):
         self.assertEqual(self.check(q(), led, quiz_date="2026-09-20").errors, [])
 
 
-class TestSelection(unittest.TestCase):
-    def setUp(self):
-        self.index = json.loads((ROOT / "knowledge/index.json").read_text())
+def fixture_index() -> dict:
+    """A synthetic ingestion map with the real material's awkward shape.
 
-    def test_weights_by_section_not_by_novelty(self):
-        """SAIF has 9 of 20 sections but the least weight each. It must not lead."""
+    Built in-test rather than read from knowledge/index.json, which is gitignored
+    and therefore absent in CI — an earlier version read the real file and simply
+    errored on the runner, so the most important test here never actually ran.
+
+    The shape that matters: one subsection with MANY thin sections (3.3, mirroring
+    SAIF's 9) against several with few heavy ones. That is what makes ranking by
+    novelty wrong and ranking by weight-per-section right.
+    """
+    def sec(heading, tags):
+        return {"heading": heading, "exam_tags": tags, "services": []}
+
+    pages = [{
+        "title": "Module A", "url": "https://n/a", "ingested": True,
+        "sections": [sec("01 — Hierarchy", ["1.5"]), sec("02 — IAM", ["1.4"]),
+                     sec("03 — Roles", ["1.4"]), sec("04 — Service accounts", ["1.2"]),
+                     sec("05 — Security", ["5.1"])],
+    }, {
+        "title": "Module B", "url": "https://n/b", "ingested": True,
+        "sections": [sec("01 — VPC", ["2.2"]), sec("04 — Compat", ["2.2"]),
+                     sec("05 — LB", ["2.1"]), sec("08 — Connect", ["2.3"])],
+    }, {
+        # The SAIF-shaped page: many sections, one low-weight subsection.
+        "title": "AI Notes", "url": "https://n/c", "ingested": True,
+        "sections": [sec(f"AI section {i}", ["3.3"]) for i in range(1, 10)],
+    }, {
+        "title": "Unread", "url": "https://n/d", "ingested": False, "sections": [],
+    }]
+    return {"courses": [{"material": {"pages": pages}}]}
+
+
+def drive(index, days=40):
+    """Run selection forward, feeding picks back in. Returns (pairs, exhausted_on, last)."""
+    ledger = {"sections": {}, "questions": {}}
+    start = datetime.date(2026, 9, 12)
+    seen, dupes, last = [], [], None
+    for i in range(days):
+        date = (start + datetime.timedelta(days=i)).isoformat()
+        r = select_topics.select(today=date, ledger=ledger, index=index)
+        last = r
+        if not r["topics"]:
+            return seen, date, r, dupes
+        for t in r["topics"]:
+            pair = (t["key"], t["angle"])
+            if pair in seen:
+                dupes.append((date, pair))
+            seen.append(pair)
+            e = ledger["sections"].setdefault(
+                t["key"], {"angles_used": [], "taught": [], "blueprint": [t["blueprint"]]})
+            e["angles_used"].append(t["angle"])
+            e["taught"].append({"date": date, "angle": t["angle"]})
+            e["last_taught"] = date
+    return seen, None, last, dupes
+
+
+class TestSelection(unittest.TestCase):
+    """Hermetic: no dependency on private material, so these run in CI."""
+
+    def setUp(self):
+        self.index = fixture_index()
+
+    def test_weight_per_section_beats_novelty(self):
+        """The many-thin-sections subsection must not lead day one."""
         r = select_topics.select(today="2026-09-12",
                                  ledger={"sections": {}, "questions": {}},
                                  index=self.index)
-        first = r["topics"][0]
-        self.assertGreaterEqual(first["weight_per_section"], 5.0)
-        self.assertNotIn("3.3", [t["blueprint"] for t in r["topics"][:2]],
-                         "SAIF should not occupy the top of day one")
+        top_two = [t["blueprint"] for t in r["topics"][:2]]
+        self.assertNotIn("3.3", top_two,
+                         "a low-weight subsection with many sections must not lead")
+        self.assertGreaterEqual(r["topics"][0]["weight_per_section"], 5.0)
 
     def test_reports_remaining_angles(self):
         r = select_topics.select(today="2026-09-12",
@@ -135,52 +194,36 @@ class TestSelection(unittest.TestCase):
                                  index=self.index)
         self.assertGreater(r["remaining_angles"], 0)
 
-    def test_no_repeats_across_a_full_run(self):
-        """The question that prompted all this: no new material, do I get repeats?"""
-        ledger = {"sections": {}, "questions": {}}
-        start = datetime.date(2026, 9, 12)
-        seen, exhausted = set(), None
-
-        for i in range(40):
-            date = (start + datetime.timedelta(days=i)).isoformat()
-            r = select_topics.select(today=date, ledger=ledger, index=self.index)
-            if not r["topics"]:
-                exhausted = date
-                break
-            for t in r["topics"]:
-                pair = (t["key"], t["angle"])
-                self.assertNotIn(pair, seen, f"repeated {pair} on {date}")
-                seen.add(pair)
-                e = ledger["sections"].setdefault(
-                    t["key"], {"angles_used": [], "taught": [], "blueprint": [t["blueprint"]]})
-                e["angles_used"].append(t["angle"])
-                e["taught"].append({"date": date, "angle": t["angle"]})
-                e["last_taught"] = date
-
-        self.assertIsNotNone(exhausted, "should reach exhaustion rather than loop forever")
-        self.assertGreater(len(seen), 50, "should yield weeks of distinct material first")
+    def test_no_repeats_with_no_new_material(self):
+        """The question that prompted this work: add nothing, do I get repeats?"""
+        seen, exhausted, _, dupes = drive(self.index)
+        self.assertEqual(dupes, [], f"repeated (section, angle) pairs: {dupes[:3]}")
+        self.assertEqual(len(seen), len(set(seen)))
+        self.assertIsNotNone(exhausted, "must reach exhaustion, not loop forever")
+        self.assertGreater(len(seen), 40, "should yield weeks of distinct material first")
 
     def test_exhaustion_names_what_to_add(self):
-        ledger = {"sections": {}, "questions": {}}
-        start = datetime.date(2026, 9, 12)
-        for i in range(40):
-            date = (start + datetime.timedelta(days=i)).isoformat()
-            r = select_topics.select(today=date, ledger=ledger, index=self.index)
-            if not r["topics"]:
-                self.assertEqual(r["phase"], "E")
-                self.assertIn("reason", r)
-                ids = [row[0] for row in r["add_next"]]
-                self.assertIn("4.1", ids, "should name the heaviest uncovered area")
-                self.assertEqual(r["add_next"][0][0][0], "4",
-                                 "heaviest uncovered subsection should lead")
-                return
-            for t in r["topics"]:
-                e = ledger["sections"].setdefault(
-                    t["key"], {"angles_used": [], "taught": [], "blueprint": [t["blueprint"]]})
-                e["angles_used"].append(t["angle"])
-                e["taught"].append({"date": date, "angle": t["angle"]})
-                e["last_taught"] = date
-        self.fail("never exhausted")
+        _, exhausted, last, _ = drive(self.index)
+        self.assertIsNotNone(exhausted)
+        self.assertEqual(last["phase"], "E")
+        self.assertIn("reason", last)
+        ids = [row[0] for row in last["add_next"]]
+        self.assertTrue(ids, "must name uncovered subsections")
+        # Heaviest uncovered first; §4.x is untouched by the fixture.
+        self.assertTrue(ids[0].startswith("4"),
+                        f"heaviest uncovered should lead, got {ids[:3]}")
+
+
+@unittest.skipUnless((ROOT / "knowledge/index.json").exists(),
+                     "real index is gitignored; hermetic tests cover the logic")
+class TestSelectionAgainstRealMaterial(unittest.TestCase):
+    """Same guarantees against the actual ingested material, when present."""
+
+    def test_no_repeats_and_reaches_exhaustion(self):
+        index = json.loads((ROOT / "knowledge/index.json").read_text())
+        seen, exhausted, last, dupes = drive(index)
+        self.assertEqual(dupes, [])
+        self.assertIsNotNone(exhausted)
 
 
 class TestDigestAngleRepeat(unittest.TestCase):
