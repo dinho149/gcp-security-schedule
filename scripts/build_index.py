@@ -102,8 +102,10 @@ COURSES = [
                      sec("03 — Scaling virtual machines", [], ["autoscaling"]),
                      sec("04 — Important VPC compatibilities", ["2.2", "2.3"],
                          ["firewall rules", "network tags", "VPC Peering", "Shared VPC", "routing tables"],
-                         "GAP: teaches firewall targets via network tags only. Official sample Q6 "
-                         "keys on service-account targets, which this material does not cover."),
+                         "NOT-YET-COVERED: teaches firewall targets via network tags only. "
+                         "Official sample Q6 keys on service-account targets. Planning signal "
+                         "for coverage reporting only — must never be taught or quizzed until "
+                         "material covering it lands."),
                      sec("05 — Cloud Load Balancing", ["2.1"],
                          ["Cloud Load Balancing", "Application Load Balancer", "Network Load Balancer"]),
                      sec("06 — Cloud DNS", ["2.1"], ["Cloud DNS"]),
@@ -189,7 +191,7 @@ def main() -> int:
     print(f"material pages   : {len(done)}/{len(pages)} ingested")
     print(f"sections         : {len(secs)} ({len(tagged)} mapped to blueprint)")
     print(f"blueprint tags   : {sorted({t for s in tagged for t in s['exam_tags']})}")
-    print(f"gap notes        : {sum('GAP' in (s.get('note') or '') for s in secs)}")
+    print(f"not-yet-covered  : {sum('NOT-YET-COVERED' in (s.get('note') or '') for s in secs)}")
     print(f"-> {out.relative_to(ROOT)}")
     return 0
 

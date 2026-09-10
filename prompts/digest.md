@@ -87,6 +87,11 @@ it or cut it, rather than inventing filler.
   (VPC Service Controls is the standing example).
 - Depth goes in the thread, never inline. Keep the main read under ~6 minutes.
 - Cite only sections with `ingested: true`.
+- **Never teach beyond the training.** Every topic must be fully sourced from
+  ingested material. Do not teach a known gap, do not "flag what the exam also
+  tests", do not preview what a later course will cover. The learner is working
+  through the material in order and will get there. A topic that needs a source
+  outside their notes is the wrong topic — pick another.
 
 ## Failure modes to avoid
 
@@ -97,3 +102,4 @@ it or cut it, rather than inventing filler.
 | Four chunks all bulleted lists | Rotate: table, contrast pair, diagram, checklist. |
 | A claim with no citation | Cut it or find the section. |
 | Reads like documentation | It should read like a colleague who already knows what you know. |
+| Teaches something the course hasn't reached | Cut it. It is coming in a later module; running ahead is not helping. |

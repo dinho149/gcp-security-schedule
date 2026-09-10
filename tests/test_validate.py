@@ -160,3 +160,66 @@ class TestGrounding(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestDigestCoverage(unittest.TestCase):
+    """A digest may only teach what the ingested material covers.
+
+    The first digest shipped a topic that taught past the course, because the
+    sync-notion skill described gaps as "prime digest material". These lock the
+    rule down so wording alone is not the only thing holding it.
+    """
+
+    CTX = {
+        "headings": {"03 — IAM roles", "08 — Connecting Networks to Google VPC"},
+        "covered_subsections": {"1.4", "2.3"},
+    }
+
+    def run_digest(self, topics):
+        r = validate.Report()
+        with tempfile.NamedTemporaryFile("w", suffix="digest.json", delete=False) as f:
+            json.dump({"slack": {"topics": topics}}, f)
+            path = Path(f.name)
+        try:
+            validate.check_digest(r, path, self.CTX)
+        finally:
+            path.unlink()
+        return r
+
+    def good_topic(self, **over):
+        t = {"n": 1, "blueprint": "1.4", "component": "chain",
+             "source": {"heading": "03 — IAM roles", "notion_url": "https://x"}}
+        t.update(over)
+        return t
+
+    def test_covered_topic_passes(self):
+        self.assertEqual(self.run_digest([self.good_topic()]).errors, [])
+
+    def test_rejects_uncovered_subsection(self):
+        r = self.run_digest([self.good_topic(blueprint="4.1")])
+        self.assertTrue(any("has not reached it yet" in e for e in r.errors), r.errors)
+
+    def test_rejects_topic_marked_beyond_material(self):
+        r = self.run_digest([self.good_topic(beyond_material=True)])
+        self.assertTrue(any("never digest content" in e for e in r.errors), r.errors)
+
+    def test_rejects_gap_flag(self):
+        r = self.run_digest([self.good_topic(gap=True)])
+        self.assertTrue(any("never digest content" in e for e in r.errors), r.errors)
+
+    def test_rejects_heading_not_in_index(self):
+        r = self.run_digest([self.good_topic(
+            source={"heading": "99 — Invented", "notion_url": "https://x"})])
+        self.assertTrue(any("not present in knowledge/index.json" in e for e in r.errors), r.errors)
+
+    def test_rejects_unsourced_topic(self):
+        r = self.run_digest([self.good_topic(source={})])
+        self.assertTrue(any("sourced from ingested material" in e for e in r.errors), r.errors)
+
+    def test_warns_on_repeated_visual_component(self):
+        r = self.run_digest([
+            self.good_topic(n=1, component="chain"),
+            self.good_topic(n=2, component="chain"),
+        ])
+        self.assertEqual(r.errors, [])
+        self.assertTrue(any("repeats visual component" in w for w in r.warnings), r.warnings)

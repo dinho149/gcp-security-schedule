@@ -128,6 +128,7 @@ def check_index(r: Report, bp: dict) -> dict:
     valid = {sub["id"] for s in bp.get("sections", []) for sub in s["subsections"]}
 
     headings: set[str] = set()
+    covered: set[str] = set()
     for course in idx.get("courses", []):
         for page in course["material"]["pages"]:
             if page["ingested"] and not page["sections"]:
@@ -140,7 +141,9 @@ def check_index(r: Report, bp: dict) -> dict:
                     if tag not in valid:
                         r.error("index", f"{page['title']!r} → {s['heading']!r} "
                                          f"has unknown exam tag {tag!r}")
-    return {"index": idx, "headings": headings}
+                    elif page["ingested"]:
+                        covered.add(tag)
+    return {"index": idx, "headings": headings, "covered_subsections": covered}
 
 
 def check_quiz(r: Report, path: Path, ctx: dict) -> None:
@@ -223,6 +226,63 @@ def check_quiz(r: Report, path: Path, ctx: dict) -> None:
         r.warn(where, f"scenario depth mix {depth_seen} != configured {want}")
 
 
+def check_digest(r: Report, path: Path, ctx: dict) -> None:
+    """A digest may only teach what the ingested material covers.
+
+    The learner is working through their course in order and asked explicitly not
+    to be run ahead of. An earlier version of the digest prompt encouraged
+    "flagging gaps" -- teaching things the course had not reached yet -- which is
+    exactly that. This makes the rule mechanical rather than a matter of wording.
+    """
+    where = path.name
+    try:
+        digest = json.loads(path.read_text())
+    except json.JSONDecodeError as e:
+        r.error(where, f"invalid JSON: {e}")
+        return
+
+    topics = (digest.get("slack") or {}).get("topics", [])
+    if not topics:
+        r.warn(where, "no topics recorded")
+        return
+
+    covered = ctx.get("covered_subsections", set())
+    headings = ctx.get("headings", set())
+
+    seen_components = []
+    for topic in topics:
+        tid = f"{where} topic {topic.get('n', '?')}"
+
+        # Sourcing: must cite an ingested heading.
+        src = topic.get("source") or {}
+        heading = src.get("heading")
+        if not heading:
+            r.error(tid, "no source heading — a topic must be sourced from ingested material")
+        elif headings and heading not in headings:
+            r.error(tid, f"cites heading {heading!r} not present in knowledge/index.json")
+
+        # Coverage: the subsection must actually be teachable.
+        sub = topic.get("blueprint")
+        if not sub:
+            r.error(tid, "no blueprint subsection recorded")
+        elif covered and sub not in covered:
+            r.error(tid, f"subsection {sub} is not covered by ingested material — "
+                         "the training has not reached it yet, so it must not be taught")
+
+        # Explicit guard against the failure this check exists for.
+        if topic.get("beyond_material") or topic.get("gap"):
+            r.error(tid, "marked as beyond the course material — gaps are planning "
+                         "signal for coverage reporting, never digest content")
+
+        if c := topic.get("component"):
+            seen_components.append(c)
+
+    dupes = {c for c in seen_components if seen_components.count(c) > 1}
+    if dupes:
+        r.warn(where, f"repeats visual component(s) {sorted(dupes)} — house style asks "
+                      "for a different shape per topic")
+
+
 def main(argv: list[str]) -> int:
     r = Report()
     ctx = check_config(r)
@@ -234,13 +294,18 @@ def main(argv: list[str]) -> int:
     else:
         ctx["services"] = set()
 
-    quizzes = [Path(a) for a in argv]
-    if not quizzes:
+    quizzes = [Path(a) for a in argv if a.endswith("quiz.json")]
+    digests = [Path(a) for a in argv if a.endswith("digest.json")]
+    if not argv:
         quizzes = sorted((ROOT / "state.local/history").glob("*/quiz.json"))
+        digests = sorted((ROOT / "state.local/history").glob("*/digest.json"))
     for q in quizzes:
         check_quiz(r, q, ctx)
+    for d in digests:
+        check_digest(r, d, ctx)
 
-    print(f"validate: config + index checked, {len(quizzes)} quiz file(s)")
+    print(f"validate: config + index checked, {len(quizzes)} quiz + "
+          f"{len(digests)} digest file(s)")
     for w in r.warnings:
         print(f"  WARN  {w}")
     for e in r.errors:

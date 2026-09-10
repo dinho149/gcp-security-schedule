@@ -53,11 +53,19 @@ If the material doesn't cover it, say so and pick something else. Do not fill
 gaps from general knowledge, however confident you are. The whole point of the
 citations is that the reader can check you without trusting you.
 
-### 3. Never quiz beyond covered material
+### 3. Never teach or quiz beyond covered material
 
-`knowledge/coverage.md` is the authority on what's askable. A subsection marked
-⬜ is off-limits until its material lands in Notion. Sections with
+`knowledge/coverage.md` is the authority. A subsection marked ⬜ is off-limits —
+for digests **and** quizzes — until its material lands in Notion. Sections with
 `ingested: false` cannot be cited at all.
+
+This includes **known gaps**. Where the exam tests something the course only
+partly covers, that is recorded as planning signal and surfaced in coverage
+reporting. It is never taught. The learner is still working through the training
+and will reach it; running ahead is the thing they explicitly asked us not to do.
+
+If a digest topic cannot be sourced entirely from ingested material, pick a
+different topic.
 
 ## Layout
 

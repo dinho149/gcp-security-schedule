@@ -46,8 +46,15 @@ no sections. The grounding gate refuses to cite it. Never guess at headings.
   and calibrate difficulty.
 - Note **coverage gaps** where the exam tests something the material only partly
   covers. Standing example: Module 3 teaches firewall targeting by network tag,
-  but official sample Q6 keys on service-account targets. Record these as a
-  `note` on the section — they are prime digest material.
+  but official sample Q6 keys on service-account targets.
+
+  Record these as a `note` on the section. **They are planning signal only — never
+  teaching content.** A gap says "this training has not reached here yet", and the
+  learner is still working through the course. It will be covered in due course;
+  getting there first is exactly the rushing they asked us not to do.
+
+  Gaps surface in `knowledge/coverage.md` and `!status`. They must never appear in
+  a digest or a quiz.
 
 ## Rebuild
 

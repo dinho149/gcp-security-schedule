@@ -155,6 +155,50 @@ are all caught, with zero false positives on the real tree.
 
 ---
 
+## Gaps are planning signal, never teaching content
+
+The first digest included a topic titled "A gap between your material and the
+exam": Module 3 teaches firewall targeting by network tag, while official sample
+question 6 keys on service-account targets. It cited the sample question honestly
+and said the course did not cover it.
+
+It should not have been there at all.
+
+The original brief was explicit: *"if the courses do not match what is covered by
+the exam yet, wait, don't rush as I am still working my way through the training —
+it should cover only what is in the training."* Teaching a gap is precisely
+running ahead. The learner reaches that material in due course and meets it
+properly there, rather than as a spoiler.
+
+**Root cause was a line I wrote in `.claude/skills/sync-notion/SKILL.md`:**
+gaps should be recorded "— they are prime digest material." That single clause
+turned a coverage-tracking feature into a teaching instruction.
+
+### The fix, in three layers
+
+1. **Wording.** sync-notion now says gaps are planning signal only. `CLAUDE.md`
+   rule 3 covers teaching as well as quizzing. `prompts/digest.md` forbids
+   teaching beyond the training and lists it as a failure mode.
+2. **Mechanical.** `scripts/validate.py` gained `check_digest`: every topic must
+   cite an ingested heading, its subsection must be covered, and a topic marked
+   `beyond_material` is rejected outright.
+3. **Where gaps do live.** `knowledge/coverage.md` and `!status`, as "not reached
+   yet". Useful for planning what to study next; never rendered as a lesson.
+
+### The limit of the mechanical check, stated honestly
+
+`check_digest` catches a topic on an *uncovered subsection*, and one that
+self-declares `beyond_material`. It cannot verify that a topic's prose stays
+within what its cited section actually says — no check can entail that from text.
+The retracted topic cited a covered heading; what exceeded the material was the
+claim, not the citation.
+
+So layer 2 is a backstop. Layer 1 — the prompt rules — is what actually carries
+this, which is why the wording was fixed at the source rather than patched at the
+point of use.
+
+---
+
 ## The material has a real gap against the exam
 
 Module 3 teaches firewall rule targeting via **network tags** only. Official
