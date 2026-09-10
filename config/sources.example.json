@@ -1,0 +1,45 @@
+{
+  "_note": "Shape of knowledge/sources.local.json, which is gitignored because it describes a private Notion workspace. The sync-notion skill writes the real one.",
+  "root": {
+    "title": "Professional Cloud Security Engineer",
+    "url": "https://app.notion.com/p/<page-id>"
+  },
+  "courses": [
+    {
+      "title": "<course name>",
+      "url": "https://app.notion.com/p/<page-id>",
+      "transcript": {
+        "url": "https://app.notion.com/p/<page-id>",
+        "ingested": true,
+        "modules": {
+          "<module name>": ["<section heading>", "Section Quiz"]
+        }
+      },
+      "material": {
+        "url": "https://app.notion.com/p/<page-id>",
+        "pages": [
+          {
+            "title": "<module page title>",
+            "url": "https://app.notion.com/p/<page-id>",
+            "ingested": true,
+            "quiz_questions": 3,
+            "sections": [
+              {
+                "heading": "<exact heading text, character for character>",
+                "exam_tags": ["1.4"],
+                "services": ["IAM"],
+                "note": "optional; NOT-YET-COVERED: ... for planning signal only"
+              }
+            ]
+          },
+          {
+            "title": "<a page you know exists but have not read>",
+            "url": "https://app.notion.com/p/<page-id>",
+            "ingested": false,
+            "sections": []
+          }
+        ]
+      }
+    }
+  ]
+}

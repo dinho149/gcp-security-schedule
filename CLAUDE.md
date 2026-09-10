@@ -26,12 +26,16 @@ Local-only, gitignored, and **must stay that way**:
 |---|---|
 | `profile.local.yaml` | Learner background, employer tooling anchors |
 | `config/config.local.yaml` | Slack channel and user ids, Notion page ids |
-| `knowledge/` | Derived from a private Notion workspace |
+| `knowledge/` | Derived from a private Notion workspace (incl. `sources.local.json`) |
 | `reference/exemplars/` | Google's sample questions — not ours to republish |
 | `state.local/` | Quiz results, mastery scores |
 
 If you need a new config value, add it to the `.example.yaml` with a placeholder
 and read the real one from the `.local` file.
+
+**Never hard-code Notion page ids in committed code.** The ingestion map lives in
+the gitignored `knowledge/sources.local.json`; `config/sources.example.json` shows
+the shape. `leakcheck.py` fails the build on a 32-hex id in a tracked file.
 
 ## Three rules that override everything else
 

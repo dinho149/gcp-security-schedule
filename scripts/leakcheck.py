@@ -43,7 +43,15 @@ GENERIC_SECRETS = [
     (re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}"), "Slack token"),
     (re.compile(r"\bsecret_[A-Za-z0-9]{32,}"), "Notion integration token"),
     (re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"), "private key"),
+    # A 32-hex Notion page id identifies a page in a private workspace. Harmless
+    # on its own -- the page is still ACL'd -- but it describes private structure,
+    # and .gitignore excludes knowledge/ for exactly that reason. Committed code
+    # must read ids from the gitignored ingestion map, never hard-code them.
+    (re.compile(r"\b[0-9a-f]{32}\b"), "Notion page id"),
 ]
+
+# Placeholder ids in *.example.* files are documentation, not real pages.
+ID_ALLOW_PATHS = re.compile(r"(^|/)[^/]*\.example\.[a-z]+$|^docs/|^reference/question-spec\.md$")
 
 # Emails that are fine in a public repo: the git noreply address, documentation
 # placeholders, and Google service-account addresses (which are resource
@@ -129,6 +137,8 @@ def main() -> int:
         for pattern, label in GENERIC_SECRETS:
             for m in pattern.finditer(text):
                 if label == "email address" and EMAIL_ALLOW.search(m.group(0)):
+                    continue
+                if label == "Notion page id" and ID_ALLOW_PATHS.search(path):
                     continue
                 line = text[: m.start()].count("\n") + 1
                 failures.append(f"SECRET        {path}:{line}\n              -> {label}")

@@ -15,7 +15,7 @@ exactly as intended.
 |---|---|
 | `profile.local.yaml` | Background, certifications, employer tooling anchors |
 | `config/config.local.yaml` | Slack channel and user ids, Notion page ids |
-| `knowledge/` | Derived from a private Notion workspace |
+| `knowledge/` | Derived from a private Notion workspace, including `sources.local.json` — the ingestion map of page ids, course titles and headings |
 | `reference/exemplars/` | Google's sample questions — not ours to republish |
 | `state.local/` | Quiz results, scores, weak areas |
 
@@ -27,6 +27,25 @@ that can be rebuilt.
 
 The cost is real: **no version-controlled history of results, and no diff of how
 the profile evolved.** That was the accepted trade for keeping the repo public.
+
+## Committed code must not hard-code Notion ids
+
+`scripts/build_index.py` originally embedded the ingestion map directly — 18 page
+ids plus every course, module and section title. It was caught in the final audit
+before the first public push.
+
+Low actual risk: a page id grants nothing without permissions, and the module
+titles come from a public Google Cloud course. But it contradicted the boundary
+above, and git history on a public repo is permanent — so it was fixed *before*
+publishing rather than after.
+
+The map now lives in the gitignored `knowledge/sources.local.json`, with
+`config/sources.example.json` documenting the shape. `leakcheck.py` fails on any
+32-hex Notion id in a tracked file, excluding `*.example.*` and docs where such
+ids are placeholders.
+
+`config/exam-blueprint.yaml` now cites Google's public exam guide rather than a
+private Notion mirror of it — more correct as well as more shareable.
 
 ## Enforcement
 

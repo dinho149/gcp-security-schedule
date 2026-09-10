@@ -1,13 +1,14 @@
 # Professional Cloud Security Engineer — exam blueprint
-# Transcribed verbatim from the exam guide in Notion:
-# https://app.notion.com/p/REDACTED-NOTION-PAGE-ID
+# Transcribed verbatim from Google's official exam guide:
+# https://cloud.google.com/learn/certification/cloud-security-engineer
+# PDF: https://services.google.com/fh/files/misc/professional_cloud_security_engineer_exam_guide_english.pdf
 #
 # Weights drive quiz question sampling. They are renormalised over
 # whatever `knowledge/coverage.md` marks as covered, so a section you
 # have not studied yet contributes nothing until its material lands.
 
 exam: Professional Cloud Security Engineer
-source: https://app.notion.com/p/REDACTED-NOTION-PAGE-ID
+source: https://cloud.google.com/learn/certification/cloud-security-engineer
 format:
   questions: "50-60"
   duration_minutes: 120
