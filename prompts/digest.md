@@ -14,15 +14,48 @@ explicitly the preparation for it: cover the topics the quiz will draw from.
 | `state.local/mastery.json` | Weakest and most-due topics |
 | `docs/house-style.md` | Voice, typography, attention rules |
 
-## Choosing today's topics
+## Choosing today's topics — don't. Run the selector.
 
-1. Start from the weakest / most-due entries in `mastery.json`.
-2. **Weight up anything in `profile.local.yaml` → `aws_traps`.** Those are the
-   marks actually at risk. A trap that has never appeared should outrank a
-   topic already scoring well.
-3. Restrict to subsections marked ✅ in `coverage.md`.
-4. Pick 3–4 that hang together. A digest with a thesis beats a digest with
-   coverage.
+```bash
+.venv/bin/python scripts/build_ledger.py          # what has already been said
+.venv/bin/python scripts/select_topics.py --json  # what to say today
+```
+
+Topic choice is **not** a judgement call. The selector knows what has been taught
+and from which angle; you do not. It returns the sections, the angle for each, and
+the phase it is in.
+
+Your job is to write the topics it hands you, at the angle it specifies.
+
+### The angles
+
+Each pass over a section must use an angle it has not had. This is what makes a
+second pass worth reading rather than a re-run.
+
+| Angle | Write |
+|---|---|
+| `delta` | How this differs from the AWS equivalent — or that it has none |
+| `trap` | The precision distinction the exam tests: scope, level, which of two similar things |
+| `scenario` | A design decision where this section determines the answer |
+| `synthesis` | How it interacts with another already-taught section |
+| `remediation` | Rebuild a concept answered wrong — approach from where the wrong answer suggests the model broke, do not just re-explain |
+
+**A remediation pass is not a repeat of the delta pass.** If you cannot say
+something genuinely new at the given angle, say so rather than padding — that is a
+signal the selector should have moved on.
+
+### When the selector returns nothing (phase E)
+
+The material is exhausted: every section covered from every applicable angle.
+**Do not invent a fifth way to explain the same thing.** Post the short honest
+message instead:
+
+- everything in the material has been covered at every applicable angle
+- where they stand: reachable exam weight, weakest areas
+- **what to add next** — `add_next` from the selector, heaviest exam weight first
+- a link to the Notion PCSE page
+
+The quiz still runs that day. Spaced repetition never exhausts.
 
 ## Structure — one message per topic
 

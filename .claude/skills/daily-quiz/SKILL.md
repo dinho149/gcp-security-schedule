@@ -9,6 +9,15 @@ Follow `prompts/quiz.md` for content and `reference/question-spec.md` for
 structure. **Read the spec in full before generating** — it is measured from 20
 real sample questions and overrides intuition about how these questions look.
 
+## Repetition rules
+
+Run `scripts/build_ledger.py` first. A question whose fingerprint has been asked
+before is **rejected** — except that a question answered *wrong* may return
+verbatim **once**, at least 3 days later, flagged `"is_retest": true`.
+
+`quiz.mix.new` means a new fingerprint, not a new section, so **the quiz never
+exhausts** even when the digest reports it has nothing new to teach.
+
 ## Generate then prove
 
 ```bash

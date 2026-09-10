@@ -1,0 +1,63 @@
+# Teaching angles.
+#
+# A section can be taught more than once, but each pass must use an angle it has
+# not had. This is what makes "is there more to say?" a number rather than a
+# judgement call:
+#
+#     remaining = sum over sections of (applicable_angles - angles_used)
+#
+# When that reaches zero the material is genuinely exhausted, and the digest says
+# so and names what to add — rather than inventing a fifth way to explain the
+# same thing.
+#
+# Keep this list SHORT. Every angle must have a job that the others cannot do.
+# Adding a near-duplicate angle just manufactures filler with extra steps.
+
+angles:
+  - id: delta
+    label: The AWS delta
+    description: >-
+      How this differs from the AWS equivalent, or the fact that it has none.
+      The default first pass for a reader with a deep AWS background.
+    applicable: has_aws_reference     # a mapping exists, OR is explicitly absent
+    priority: 1
+
+  - id: trap
+    label: The precision distinction
+    description: >-
+      The specific detail the exam tests — scope, level, which of two similar
+      roles. Usually a near-variant distractor in question form.
+    applicable: always
+    priority: 2
+
+  - id: scenario
+    label: Applied decision
+    description: >-
+      A design decision where this section determines the answer. Closest to how
+      the exam actually asks, and to real work.
+    applicable: always
+    priority: 3
+
+  - id: synthesis
+    label: Combined with a neighbour
+    description: >-
+      How this section interacts with another already-taught section in the same
+      blueprint subsection. Only meaningful once both have been covered.
+    applicable: sibling_taught
+    priority: 4
+
+  - id: remediation
+    label: Targeted at a miss
+    description: >-
+      Rebuilds understanding of something answered wrong. Not a re-explanation —
+      it approaches from wherever the wrong answer suggests the model broke.
+    applicable: has_recorded_miss     # unlocked only by a graded wrong answer
+    priority: 0                       # outranks everything when available
+
+# How many topics a digest asks for. Selection may return fewer near exhaustion,
+# which is a signal rather than a failure.
+topics_per_digest: 4
+
+# A section is "stale" and eligible for a second pass after this many days.
+# Prevents teaching the same section twice in one week from different angles.
+restale_days: 5

@@ -13,9 +13,25 @@ file covers the mechanics.
 1. Read `profile.local.yaml`. **Altitude first** — the reader holds AWS Security
    Specialty, AWS SA Pro and CKA and leads a platform security team. Explaining
    something on `assume_known` is the worst failure this system can make.
-2. Read `knowledge/coverage.md` for what is teachable.
-3. Read `state.local/mastery.json` for what is weak or due.
-4. Pick topics, weighting `aws_traps` up.
+2. **Run the selector — do not choose topics yourself:**
+
+   ```bash
+   .venv/bin/python scripts/build_ledger.py
+   .venv/bin/python scripts/select_topics.py --json
+   ```
+
+   It returns each section, the **angle** to use, and the phase. It knows what has
+   already been taught and from which angle; you do not.
+
+3. Write each topic at the angle given. Record the `angle` on every topic in
+   `digest.json` — the ledger and the repeat check both depend on it.
+
+### If the selector returns no topics (phase E)
+
+The material is exhausted. **Do not pad.** Post the short honest message described
+in `prompts/digest.md`: what has been covered, where they stand, and precisely
+what to add next from `add_next`. Then let the quiz run as normal — spaced
+repetition does not exhaust.
 
 ## Visuals
 

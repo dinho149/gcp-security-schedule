@@ -13,13 +13,14 @@ one-line edit that takes effect on the next tick.
 
 ```
 1. git pull                       pick up merged feedback PRs
-2. on-demand commands             anything the learner asked for since last tick
-3. sync-notion                    first tick of the day only
-4. digest    if due & not posted
-5. quiz      if due & digest posted & not posted
-6. grade     if due, or ✅ on the quiz parent
-7. feedback  any unprocessed intake
-8. commit + push                  logic changes only; state stays local
+2. build_ledger.py                what has already been taught and asked
+3. on-demand commands             anything the learner asked for since last tick
+4. sync-notion                    first tick of the day only
+5. digest    if due & not posted     (selector may return "nothing new")
+6. quiz      if due & digest posted & not posted
+7. grade     if due, or ✅ on the quiz parent
+8. feedback  any unprocessed intake
+9. commit + push                  logic changes only; state stays local
 ```
 
 Every step is **idempotent and order-guarded**. Re-running a tick must not
@@ -66,9 +67,13 @@ VPC Service Controls", "grade it". Same skills, same state, no tick to wait for.
 ## Before writing anything
 
 ```bash
-.venv/bin/python scripts/validate.py   # content gate
-.venv/bin/python scripts/leakcheck.py  # privacy gate, before any commit
+.venv/bin/python scripts/build_ledger.py   # refresh what has been said
+.venv/bin/python scripts/validate.py       # content + repetition gate
+.venv/bin/python scripts/leakcheck.py      # privacy gate, before any commit
 ```
+
+The ledger is derived from posted history, so rebuild it **before** validating —
+otherwise the repetition checks compare against a stale picture.
 
 Never commit `state.local/`, `knowledge/`, or `profile.local.yaml`. This
 repository is public.

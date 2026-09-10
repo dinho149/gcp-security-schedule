@@ -21,6 +21,13 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+
+from build_ledger import fingerprint  # noqa: E402  shared so the two cannot disagree
+
+# A question answered wrong may be re-asked verbatim exactly once, and not before
+# this many days. Repeating it sooner tests recall of an answer, not understanding.
+RETEST_MIN_DAYS = 3
 
 # From reference/question-spec.md §2, measured from the official corpus.
 OPTIONS_EXACT = 4
@@ -48,6 +55,14 @@ FICTIONAL_CO = re.compile(
     r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)?\s+"
     r"(Inc|Ltd|LLC|Corp|Corporation|Logistics|Outfitters|Retail|Holdings|Industries|Systems|Bank)\b"
 )
+
+
+def _days_between(a: str, b: str) -> int | None:
+    try:
+        import datetime
+        return (datetime.date.fromisoformat(b) - datetime.date.fromisoformat(a)).days
+    except (ValueError, TypeError):
+        return None
 
 
 class Report:
@@ -210,6 +225,32 @@ def check_quiz(r: Report, path: Path, ctx: dict) -> None:
             r.error(qid, f"labelled depth={q['depth']!r} but scenario is {n_sent} "
                          f"sentence(s), which is {band!r}")
 
+        # ── repetition ────────────────────────────────────────────────────
+        fp = fingerprint(q)
+        prior = (ctx.get("ledger", {}).get("questions") or {}).get(fp)
+        if prior:
+            # The ledger is built FROM posted history, so re-validating a quiz
+            # that has already been posted would otherwise flag every question as
+            # a duplicate of itself. Only earlier outings count.
+            asked = [d for d in prior.get("asked", []) if d != ctx.get("quiz_date")]
+        if prior and asked:
+            wrong = "wrong" in prior.get("outcomes", [])
+            if q.get("is_retest"):
+                if not wrong:
+                    r.error(qid, "flagged as a retest but was never answered wrong")
+                elif prior.get("retested"):
+                    r.error(qid, "already retested once — the concept must now come "
+                                 "back as a newly-written question")
+                elif asked and ctx.get("quiz_date"):
+                    gap = _days_between(asked[-1], ctx["quiz_date"])
+                    if gap is not None and gap < RETEST_MIN_DAYS:
+                        r.error(qid, f"retest only {gap}d after the miss; "
+                                     f"minimum is {RETEST_MIN_DAYS}d")
+            else:
+                r.error(qid, f"duplicate question — already asked on {asked[-1] if asked else '?'}"
+                             + (". Mark is_retest to use the one sanctioned verbatim retest"
+                                if wrong else ". Write a new question on this section"))
+
         src = q.get("source", {})
         if not src.get("notion_url"):
             r.error(qid, "no source.notion_url — ungrounded")
@@ -269,6 +310,18 @@ def check_digest(r: Report, path: Path, ctx: dict) -> None:
             r.error(tid, f"subsection {sub} is not covered by ingested material — "
                          "the training has not reached it yet, so it must not be taught")
 
+        # Repetition: the same section may be taught again, but never from an
+        # angle it has already had. That is what makes a second pass worth reading.
+        angle = topic.get("angle")
+        led_sec = (ctx.get("ledger", {}).get("sections") or {}).get(
+            f"{src.get('page')}::{heading}")
+        if angle and led_sec and angle in led_sec.get("angles_used", []):
+            prior = [t2["date"] for t2 in led_sec.get("taught", [])
+                     if t2.get("angle") == angle]
+            if prior and prior[-1] != (ctx.get("digest_date") or ""):
+                r.error(tid, f"already taught from the {angle!r} angle on {prior[-1]} — "
+                             "pick an unused angle or a different section")
+
         # Explicit guard against the failure this check exists for.
         if topic.get("beyond_material") or topic.get("gap"):
             r.error(tid, "marked as beyond the course material — gaps are planning "
@@ -288,6 +341,9 @@ def main(argv: list[str]) -> int:
     ctx = check_config(r)
     ctx.update(check_index(r, ctx.get("blueprint", {})))
 
+    led = ROOT / "state.local/ledger.json"
+    ctx["ledger"] = json.loads(led.read_text()) if led.exists() else {}
+
     amap = ROOT / "knowledge/aws-gcp-map.json"
     if amap.exists():
         ctx["services"] = {s["gcp"].lower() for s in json.loads(amap.read_text())["services"]}
@@ -300,8 +356,10 @@ def main(argv: list[str]) -> int:
         quizzes = sorted((ROOT / "state.local/history").glob("*/quiz.json"))
         digests = sorted((ROOT / "state.local/history").glob("*/digest.json"))
     for q in quizzes:
+        ctx["quiz_date"] = q.parent.name
         check_quiz(r, q, ctx)
     for d in digests:
+        ctx["digest_date"] = d.parent.name
         check_digest(r, d, ctx)
 
     print(f"validate: config + index checked, {len(quizzes)} quiz + "

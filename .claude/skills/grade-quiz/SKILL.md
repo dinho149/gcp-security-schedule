@@ -33,6 +33,15 @@ Whichever comes first: `grade_at` falling due, or a ✅ from the learner on the
 quiz parent message. Grade once — record `graded: true` so a later tick does not
 re-post.
 
+## Record outcomes for the ledger
+
+Write `state.local/history/<date>/results.json` with, per question, its `n` and an
+`outcome` of `correct` / `wrong` / `skipped`.
+
+`build_ledger.py` reads this to decide two things: which questions are eligible for
+the single verbatim retest, and which sections unlock the `remediation` teaching
+angle. Without it, both stay inert.
+
 ## Mastery
 
 Update `state.local/mastery.json` per topic: attempts, correct, `hint_used`,

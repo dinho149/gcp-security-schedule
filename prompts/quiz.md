@@ -37,6 +37,23 @@ Non-negotiables from the spec:
 - Add *"You want to follow Google-recommended practices."* only when the managed /
   least-privilege choice genuinely is the discriminator.
 
+## Repetition
+
+Repeating a **topic** is the point of spaced repetition. Repeating a **question**
+teaches the answer key instead of the concept.
+
+- Every question carries a fingerprint (`scripts/build_ledger.py`), insensitive to
+  formatting and to option order — reshuffling four options is the same question.
+- **A previously-asked question is rejected**, with one exception.
+- **The exception:** a question answered *wrong* may be re-asked **verbatim exactly
+  once**, no sooner than 3 days later. Set `"is_retest": true`. After that the
+  concept returns only as newly-written questions.
+- `quiz.mix.new` means a **new fingerprint**, not a new section. A fresh question on
+  an already-taught section is new. **The quiz therefore never exhausts**, even on a
+  day the digest has nothing new to say.
+
+`scripts/validate.py` enforces all of this. A duplicate fails the run.
+
 ## Grounding — non-negotiable
 
 Every question must carry `source.notion_url` and an exact `source.heading` from

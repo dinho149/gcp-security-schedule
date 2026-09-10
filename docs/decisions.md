@@ -39,6 +39,70 @@ worth it until the friction proves real.
 
 ---
 
+## Repetition: topics may repeat, content may not
+
+Asked what happens on a day with no new Notion material. The honest answer at the
+time was: **you would get repeats, and the system would not know it.**
+
+`digest.json` recorded `subsections_covered` but nothing ever read it back. The
+only anti-repeat rule applied within a single day. `state.local/mastery.json` — the
+file both prompts claimed to select from — did not exist. Nothing gave a question
+an identity.
+
+With 20 teachable sections and 4 topics a day, the all-new pool lasts ~5 days.
+
+### The distinction
+
+Repeating a **topic** is the point of spaced repetition. Repeating **content** is
+waste. So the two sides get opposite treatment:
+
+- **Quiz** — a question is fingerprinted (`sha256` of scenario + stem + *sorted*
+  options, so reshuffling four options is the same question). Duplicates are
+  rejected. The one exception: a question answered wrong returns verbatim exactly
+  once, ≥3 days later. `quiz.mix.new` means a new *fingerprint*, so the quiz never
+  exhausts.
+- **Digest** — a section may be taught again, but only from an angle it has not
+  had: `delta`, `trap`, `scenario`, `synthesis`, `remediation`. That makes
+  "is there more to say?" arithmetic: `Σ (applicable − used)`.
+
+### Weight per section, not novelty
+
+§3.3 (SAIF) holds **9 of the 20** teachable sections but only 7.7% of reachable
+exam weight. Ranking untaught sections by novelty would have spent the first two
+days on SAIF while §1.4 Authorization waited. Phase A ranks by
+*weight ÷ sections in that subsection*: §1.4 scores 5.0%/section, §3.3 scores
+0.86%.
+
+### Verified by simulation, not assertion
+
+`scripts/simulate_days.py` drives selection forward with no new material:
+
+```
+days  1-5    phase A   breadth, heaviest weight first
+days  6-15   phase C   second-pass angles (trap, then scenario)
+days 16-19   phase D   synthesis across siblings
+day  20      phase E   EXHAUSTED — 0 angles left
+```
+
+76 distinct (section, angle) pairs, **zero repeats**, and SAIF does not appear on
+day one. So today's material yields ~19 days of non-repeating digests.
+
+At exhaustion the digest says so and names what to add, heaviest first — §4.1 and
+§4.2 Managing operations at 9.5% each, then §3.1, §3.2, §1.3. Total unreachable
+weight: 39.4%.
+
+### The ledger is derived, never authored
+
+`scripts/build_ledger.py` rebuilds from `state.local/history/`, so it cannot drift
+from what was actually posted and a deleted ledger costs nothing. Rebuild it
+*before* validating, or the repetition checks compare against a stale picture.
+
+One consequence worth knowing: because the ledger is built from posted history,
+re-validating an already-posted quiz would flag every question as a duplicate of
+itself. The check excludes the quiz's own date.
+
+---
+
 ## Digest visuals: headless Chrome, not the browser extension
 
 The first digest shipped as one long message with a single diagram, because
