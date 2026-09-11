@@ -96,7 +96,15 @@ Priority for review, on top of what `next_due` says:
 ## Then
 
 1. Per-question explanation into each thread — lead with **why the chosen
-   distractor fails**, which is the half they cannot reconstruct.
+   distractor fails**, which is the half they cannot reconstruct. Each one
+   carries `source.anchor` as a **block quote**: the line of the course the keyed
+   answer rests on, verbatim. The question posted a locator so the reader could
+   navigate; the anchor is the evidence, and it is held back until now because on
+   a near-verbatim question the line is the answer.
+
+   Quote it exactly as `quiz.json` has it. `check_style` skips `>` lines, so the
+   instructor's own sentence is not measured against rules we are not free to
+   apply to it — and tidying it up would undo the one thing it is there for.
 2. Summary message with per-section breakdown and weak areas.
 3. **Complete** the `📊 Quiz Results` row that `daily-quiz` created: flip
    `status` to `graded`, write the rich result blocks, and add `results.json`

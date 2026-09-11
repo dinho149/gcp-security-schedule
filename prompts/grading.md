@@ -26,8 +26,19 @@ Post into each question's thread:
 <why the keyed answer is right, in one or two lines>
 <why the chosen distractor is wrong — name the specific difference>
 
+> <source.anchor, verbatim>
 <notion_url|<Page> → "<heading>">
+On the page: _<sub-heading>_ — <what to read there>
 ```
+
+**The anchor is the half the question held back.** It is the line of the course
+the keyed answer rests on, quoted exactly as the page has it, and it is what lets
+the reader confirm the answer came from their material rather than from us. Post
+it as a **block quote**: `check_style` skips `>` lines, so the instructor's own
+sentence is not measured against house-style rules we are not free to apply to it.
+
+Quote it verbatim. Tidying it up is the failure this whole mechanism exists to
+prevent, one step later.
 
 Where an AWS counterpart genuinely clarifies the miss, it goes **inline and in
 brackets** in those lines — `Cloud Storage (≈ S3)` — and only where

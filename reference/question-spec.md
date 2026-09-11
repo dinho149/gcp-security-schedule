@@ -19,6 +19,15 @@ arguing from memory.
 [options]    exactly 4, labelled A-D
 ```
 
+**The scenario is material-anchored.** Every entity and situation in it comes
+from the cited section — its own worked examples, terms and numbers. Generic
+subjects are the exception and are attested throughout the corpus (§3). Framing
+that carries no deciding constraint and appears nowhere in the material — an
+industry, a product launch, a compliance stake, a programme — is invention, and
+it is what makes a correctly sourced question read as though it came from
+somewhere other than the course. `prompts/quiz.md` carries the reference set of
+failures.
+
 ## 2. Hard rules (mechanically enforced)
 
 | Rule | Value | Evidence |
@@ -115,9 +124,39 @@ A question is rejected and regenerated unless:
 
 1. Every GCP service, role, permission and constraint named resolves to
    `knowledge/index.json` or `knowledge/aws-gcp-map.json`.
-2. The keyed answer traces to a specific cited section, with a Notion URL.
-3. The tagged blueprint subsection is marked covered in `knowledge/coverage.md`.
-4. All rules in §2 pass.
+2. `source.page` and `source.heading` are **one real citation** — that heading on
+   that page, not two halves that each resolve somewhere.
+3. `source.anchor` is a span of **at least 10 words**, found **verbatim in the
+   cited section's body** of the cached page. Markup is normalised (emphasis,
+   table pipes, bullets, dash and quote variants, line wrapping, case); nothing
+   word-level is. A paraphrase fails.
+4. The cited section holds at least `quiz.min_source_ratio` times the words of
+   the question written from it (scenario + stem + options).
+5. The tagged blueprint subsection is marked covered in `knowledge/coverage.md`.
+6. A `source.locator`, where given, names a sub-heading the page actually has.
+7. All rules in §2 pass.
+
+**Where the numbers come from.** Ten words: §2 measures the corpus option median
+at ~10, so an anchor shorter than one option is a term rather than a claim, and
+would match the page while asserting nothing. The ratio lives in
+`config/schedule.yaml` with its own measured basis, and caps scenario *depth* by
+material without needing a per-depth table — a 16-word section carries no
+question, a 51-word one carries bare recall and nothing larger.
 
 No invented service names. No invented role IDs. No plausible-sounding permission
-strings. If the material does not support a question, generate a different one.
+strings. If the material does not support a question, generate a different one —
+and if that leaves fewer than ten, post short and say which sections could not
+carry one. Never refill the slot from an easier section.
+
+### What this gate does not entail, stated plainly
+
+It proves the anchor exists in the section cited. It cannot prove the keyed
+answer *follows* from it, and it cannot prove the scenario stayed
+material-anchored: a question can carry a real anchor and still wrap it in an
+invented product launch. §1 and `prompts/quiz.md` carry that, as the wording
+layer — the same division `docs/decisions.md` settled for teaching beyond the
+material, where the prompt rule is load-bearing and the check is the backstop.
+
+What the anchor changes is that invention becomes **visible**. The grading reply
+quotes the line back, so the reader compares the question against the course
+themselves rather than trusting that we did.

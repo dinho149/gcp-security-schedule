@@ -16,6 +16,30 @@ about. A question assembled from a heading plus general GCP knowledge is
 ungrounded even when its citation resolves — that is the gap `docs/house-style.md`
 §2 closes. If a page has no cache, fetch it from its `notion_url` and write one.
 
+**Caching is not optional here.** `validate.py` errors on a cited page with no
+cached text, where the digest's equivalent check only warns. The asymmetry is
+deliberate: a missing cache at validate time means the question was written
+without reading the material, which is the exact failure the gate exists for, and
+degrading it to a warning in the cloud would switch it off precisely where it
+matters most.
+
+While the page is open, take three things from it:
+
+```bash
+# how much the section has to be asked about, and where to point the reader
+.venv/bin/python scripts/page_sections.py --page knowledge/<cache> --words
+.venv/bin/python scripts/page_sections.py --page knowledge/<cache> --heading "<heading>"
+```
+
+- **`source.anchor`** — the span the keyed answer rests on, verbatim. Checked
+  against the page; a paraphrase fails. Never posted with the question.
+- **`source.locator`** — the sub-heading to jump to and what to read there.
+  Posted under the citation, per `docs/house-style.md` §7.
+- **The word count** — a question may not outgrow its source. A section holding
+  fewer than `quiz.min_source_ratio` times the question's words cannot carry it;
+  that is what stops a 16-word section producing a four-sentence scenario, and
+  the invention such a scenario can only be made of.
+
 ## Repetition rules
 
 Run `scripts/build_ledger.py` first. A question whose fingerprint has been asked
@@ -33,9 +57,22 @@ exhausts** even when the digest reports it has nothing new to teach.
 
 **Post only when it exits zero.** A failing question is regenerated, not posted,
 and not softened. The gate checks option count and parallelism, stem form,
-absence of fictional companies, scenario depth against its label, and — the part
-that matters — that every citation and every service name resolves to real
-ingested material.
+absence of fictional companies, scenario depth against its label, that the cited
+subsection is covered, that the page and heading are one real citation — and, the
+part that matters, that the question quotes a line of the section it cites and is
+not longer than the material behind it.
+
+## When the material will not support ten
+
+Rewrite a failing question once. If it still cannot be anchored, **drop it** and
+post short, recording `short_reason` with the sections that could not carry one.
+
+**Never refill the slot from an easier section.** Keeping the count at ten is the
+obvious move and the one thing this must not do: the learner asked not to be
+served questions the course has not reached, and topping up is how that happens
+while every count still looks right. `validate.py` fails a short quiz that does
+not say why — a seven-question quiz that says nothing is indistinguishable from a
+broken generator.
 
 ## Posting
 
@@ -66,8 +103,9 @@ corpus, not a simplification. Say so in the stem; the reader reacts twice.
 ## Record
 
 `state.local/history/<date>/quiz.json`, including for each question: blueprint
-tag, `source` (page, exact heading, Notion URL), keyed answer, explanation,
-`services[]`, `depth`, and the Slack `message_ts` grading will read.
+tag, `source` (page, exact heading, Notion URL, **`locator`**, **`anchor`**),
+keyed answer, explanation, `services[]`, `depth`, and the Slack `message_ts`
+grading will read. A short set also carries `short_reason` at the top level.
 
 `aws_equivalents` replaces the old free-prose `aws_anchor`: a list of
 `{"gcp": ..., "aws": ...}` for every bracketed equivalence the message asserts,

@@ -18,8 +18,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "tests"))
 
 import build_ledger  # noqa: E402
+import material_fixture  # noqa: E402  a cached page the grounding checks can read
 import select_topics  # noqa: E402
 import validate  # noqa: E402
 
@@ -59,7 +61,7 @@ class TestFingerprint(unittest.TestCase):
 class TestQuizRepeatRules(unittest.TestCase):
     """Verbatim retest once, then fresh."""
 
-    SRC = {"page": "Module 2", "heading": "03 — IAM roles", "notion_url": "https://x"}
+    SRC = dict(material_fixture.SOURCE)
 
     def check(self, question, ledger, quiz_date="2026-09-20"):
         r = validate.Report()
@@ -69,9 +71,11 @@ class TestQuizRepeatRules(unittest.TestCase):
             json.dump({"questions": [question]}, f)
             path = Path(f.name)
         try:
-            validate.check_quiz(r, path, {"headings": {"03 — IAM roles"},
-                                          "schedule": {}, "services": set(),
-                                          "ledger": ledger, "quiz_date": quiz_date})
+            validate.check_quiz(r, path, {
+                "headings": {material_fixture.HEADING},
+                "page_cache": dict(material_fixture.PAGE_CACHE),
+                "schedule": {}, "services": set(),
+                "ledger": ledger, "quiz_date": quiz_date})
         finally:
             path.unlink()
         return r

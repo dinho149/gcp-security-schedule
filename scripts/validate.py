@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 import yaml
@@ -24,7 +25,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from build_ledger import fingerprint, miss_for_section  # noqa: E402  shared
-from page_sections import subheadings  # noqa: E402  one parse of a cached page
+from page_sections import (  # noqa: E402  one parse of a cached page
+    section_text, subheadings)
 from slack_links import PERMALINK_RE  # noqa: E402  one definition of the format
 
 # A question answered wrong may be re-asked verbatim exactly once, and not before
@@ -37,6 +39,24 @@ OPT_WORDS_MIN, OPT_WORDS_MAX = 1, 26
 OPT_SPREAD_MAX = 8
 OPT_RATIO_MAX = 2.6
 SENTENCES_MAX = 5
+
+# A quiz question must quote the line of material its keyed answer rests on.
+# Ten words because §2 measures the corpus option median at ~10: an anchor
+# shorter than a single option is a term, not a claim, and "Partner Interconnect"
+# would satisfy a substring test while asserting nothing.
+ANCHOR_WORDS_MIN = 10
+
+# Quizzes recorded before this date predate the anchor, locator, coverage and
+# page/heading checks, so those are warnings there and errors from here on --
+# the same cutover CACHE_REQUIRED_FROM makes below, for the same reason: a gate
+# that goes red on the system's own history is a gate that gets switched off.
+QUIZ_GROUNDING_FROM = "2026-09-12"
+
+# Only a real dated history directory is old enough to be exempt. A quiz being
+# validated anywhere else -- a fresh run, a temp file -- is checked in full,
+# because "the directory name did not sort like a date" must never be a way for
+# a live quiz to skip the gate.
+DATE_DIR_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # docs/house-style.md §5. Four per message: the section square and the timer are
 # two, and the ❌/✅ contrast pair spends the rest.
@@ -167,6 +187,15 @@ def check_config(r: Report) -> dict:
         if got != n:
             r.error("schedule", f"quiz.{key} sums to {got}, expected questions={n}")
 
+    # Same rule as readiness.target: a threshold of ours carries its derivation,
+    # or within a week nobody can tell it from a measured one.
+    ratio = q.get("min_source_ratio")
+    if not isinstance(ratio, (int, float)) or ratio <= 0:
+        r.error("schedule", f"quiz.min_source_ratio={ratio!r} is not a positive number")
+    elif not str(q.get("min_source_ratio_basis") or "").strip():
+        r.error("schedule", "quiz.min_source_ratio has no min_source_ratio_basis — "
+                            "say what the number was measured against")
+
     times = {}
     for key in ("digest_at", "quiz_at", "grade_at"):
         val = sch.get(key)
@@ -230,6 +259,10 @@ def check_index(r: Report, bp: dict) -> dict:
     valid = {sub["id"] for s in bp.get("sections", []) for sub in s["subsections"]}
 
     headings: set[str] = set()
+    # Per page as well as globally. The flat set alone lets a question cite one
+    # page's title with another page's heading -- both real, the pair invented --
+    # and the reader following that citation lands somewhere the answer is not.
+    page_headings: dict[str, set[str]] = {}
     covered: set[str] = set()
     page_cache: dict[str, str] = {}
     for course in idx.get("courses", []):
@@ -251,6 +284,7 @@ def check_index(r: Report, bp: dict) -> dict:
                 page_cache[page["title"]] = page["cache"]
             for s in page["sections"]:
                 headings.add(s["heading"])
+                page_headings.setdefault(page["title"], set()).add(s["heading"])
                 for tag in s["exam_tags"]:
                     if tag not in valid:
                         r.error("index", f"{page['title']!r} → {s['heading']!r} "
@@ -258,7 +292,172 @@ def check_index(r: Report, bp: dict) -> dict:
                     elif page["ingested"]:
                         covered.add(tag)
     return {"index": idx, "headings": headings, "covered_subsections": covered,
-            "page_cache": page_cache}
+            "page_cache": page_cache, "page_headings": page_headings}
+
+
+# Markup that differs between how a line reads on the page and how the cache
+# stores it. Normalising it away prevents a verbatim quote failing because the
+# cache bolded a word; nothing here touches a single word of the text itself.
+_SMART = str.maketrans({
+    "“": '"', "”": '"', "‘": "'", "’": "'",
+    "—": "-", "–": "-", " ": " ", "…": "...",
+})
+_MARKUP_RE = re.compile(r"[*_`|#>]+")
+_BULLET_RE = re.compile(r"(?m)^\s*(?:[-+*]|\d+\.)\s+")
+# " - " and "-" are the same dash to a reader and differ only in how the page
+# happened to set it. Without this, quoting an em-dashed line with a plain hyphen
+# fails a check that is supposed to be about words.
+_DASH_SPACE_RE = re.compile(r"\s*-\s*")
+
+
+def _norm(text: str) -> str:
+    """Normalise for a VERBATIM comparison.
+
+    Lossy about markup, never about words. Emphasis markers, table pipes, list
+    bullets, smart quotes, dash variants, line wrapping and case all collapse --
+    every one of them varies between the page and a quote of it, and none of them
+    changes what is being claimed.
+
+    What deliberately does NOT collapse: word order, word choice, stopwords,
+    numbers, negation. Collapsing any of those would let a paraphrase pass, and
+    a paraphrase passing is the exact failure this check exists to catch.
+    """
+    # NFKC first: it folds the compatibility forms -- non-breaking spaces,
+    # ligatures, full-width punctuation -- that a round trip through Notion can
+    # introduce into a page that previously read as plain ASCII.
+    t = unicodedata.normalize("NFKC", text).translate(_SMART)
+    t = _BULLET_RE.sub(" ", t)
+    t = _MARKUP_RE.sub(" ", t)
+    t = _DASH_SPACE_RE.sub("-", t)
+    return " ".join(t.lower().split())
+
+
+def _grounding_report(r: Report, path: Path):
+    """r.error, or r.warn for history recorded before the checks existed."""
+    day = path.parent.name
+    if DATE_DIR_RE.match(day) and day < QUIZ_GROUNDING_FROM:
+        return r.warn
+    return r.error
+
+
+def _cache_path(ctx: dict, page: str | None) -> Path | None:
+    """Where the cached text of a cited page lives, or None if it has none.
+
+    An absolute value passes through unchanged, which is what lets the tests
+    point at a fixture without writing into the gitignored knowledge/ tree.
+    """
+    cache = (ctx.get("page_cache") or {}).get(page or "")
+    return (Path("knowledge") / cache) if cache else None
+
+
+def _check_locator(r: Report, tid: str, src: dict, ctx: dict) -> None:
+    """A citation may point at a PLACE on the page; if it does, that place exists.
+
+    Pointing at a page and stopping left the reader hunting through 200 lines;
+    pointing at an invented sub-heading would be worse, so the pointer is checked
+    against the page it claims. Shared by digests and quizzes -- house style §7
+    makes no distinction between them and neither should the gate.
+    """
+    loc = src.get("locator") or {}
+    if not loc:
+        return
+    heading = src.get("heading") or ""
+    sub = (loc.get("subheading") or "").strip()
+    cache = _cache_path(ctx, src.get("page"))
+    if not sub:
+        r.error(tid, "source.locator has no subheading — drop the locator "
+                     "or name the sub-heading to jump to")
+    elif not cache:
+        r.warn(tid, f"cannot check the locator: no cached text for {src.get('page')!r}")
+    else:
+        subs = subheadings(cache, heading)
+        if not subs:
+            r.warn(tid, f"cannot check the locator: {heading!r} has no "
+                        "sub-headings in the cached page, or the page is "
+                        "not hydrated in this environment")
+        elif sub not in subs:
+            r.error(tid, f"locator points at {sub!r}, which is not under "
+                         f"{heading!r}. That section has: {subs}")
+    if not (loc.get("look_for") or "").strip():
+        r.warn(tid, "locator names a sub-heading but not what to look at "
+                    "there — name the table, callout or phrase")
+
+
+def _check_coverage(r: Report, tid: str, sub: str | None, ctx: dict,
+                    report=None, verb: str = "taught") -> None:
+    """The blueprint subsection must be reachable from ingested material.
+
+    CLAUDE.md rule 3 covers teaching and quizzing alike: the learner is working
+    through the course in order and asked explicitly not to be run ahead of.
+    """
+    err = report or r.error
+    covered = ctx.get("covered_subsections", set())
+    if not sub:
+        err(tid, "no blueprint subsection recorded")
+    elif covered and sub not in covered:
+        err(tid, f"subsection {sub} is not covered by ingested material — "
+                 f"the training has not reached it yet, so it must not be {verb}")
+
+
+def _check_anchor(r: Report, qid: str, q: dict, ctx: dict, report) -> None:
+    """The question quotes its source, and does not outgrow it.
+
+    Two failures, one section body, so they are checked together.
+
+    The ANCHOR is the line of material the keyed answer rests on. Without it the
+    only grounding a question had was referential -- a heading that resolves and a
+    URL that is non-empty -- which a question composed from general GCP knowledge
+    satisfies perfectly. docs/decisions.md, "The prose was never sourced".
+
+    The RATIO is what stops a question being asked of material too thin to support
+    it. A tagged section of sixteen words is a legal citation today, and a
+    four-sentence scenario built on one can only be invention. Capping the question
+    against its source caps DEPTH by material without a per-depth table: a 51-word
+    section still affords a bare-recall question and nothing larger.
+    """
+    src = q.get("source") or {}
+    page, heading = src.get("page"), src.get("heading") or ""
+    anchor = (src.get("anchor") or "").strip()
+
+    if not anchor:
+        report(qid, "no source.anchor — quote the line of material the keyed answer "
+                    "rests on. A citation that resolves proves only that the heading "
+                    "exists, not that the question came from it")
+        return
+    if len(anchor.split()) < ANCHOR_WORDS_MIN:
+        report(qid, f"source.anchor is {len(anchor.split())} words, minimum "
+                    f"{ANCHOR_WORDS_MIN} — that is a term, not a claim, and it would "
+                    "match the page while asserting nothing")
+
+    cache = _cache_path(ctx, page)
+    if cache is None:
+        # Deliberately an error where the digest's locator check warns. daily-quiz
+        # must fetch and cache every page it asks about, so a cited page with no
+        # cached text means the question was written without reading the material --
+        # exactly the failure this check exists for. Degrading it to a warning in
+        # the cloud would make the gate a no-op precisely where it matters most.
+        report(qid, f"no cached text for {page!r} — the anchor cannot be checked, and "
+                    "daily-quiz is required to cache every page it asks about")
+        return
+
+    body = section_text(cache, heading)
+    if body is None:
+        report(qid, f"{heading!r} is not a section of the cached {page!r}")
+        return
+    if _norm(anchor) not in _norm(body):
+        report(qid, f"source.anchor is not verbatim in {heading!r} — a paraphrase "
+                    "cannot anchor a question. Quote the line as the page has it")
+
+    ratio_min = ((ctx.get("schedule") or {}).get("quiz") or {}).get("min_source_ratio")
+    if not ratio_min:
+        return
+    have = len(body.split())
+    spent = len(" ".join([q.get("scenario") or "", q.get("stem") or "",
+                          *(q.get("options") or [])]).split())
+    if spent and have < ratio_min * spent:
+        report(qid, f"{heading!r} has {have} words of material behind a {spent}-word "
+                    f"question ({have / spent:.1f}x, minimum {ratio_min}x) — ask a "
+                    "shorter question, or pick a section the course covers properly")
 
 
 def check_quiz(r: Report, path: Path, ctx: dict) -> None:
@@ -277,6 +476,7 @@ def check_quiz(r: Report, path: Path, ctx: dict) -> None:
     # Injected via ctx so the check is testable without the gitignored map on disk.
     known_services = ctx.get("services", set())
     headings = ctx.get("headings", set())
+    ground = _grounding_report(r, path)
 
     depth_seen = {"bare": 0, "mid": 0, "deep": 0}
 
@@ -352,10 +552,27 @@ def check_quiz(r: Report, path: Path, ctx: dict) -> None:
                                 if wrong else ". Write a new question on this section"))
 
         src = q.get("source", {})
+        heading = src.get("heading")
         if not src.get("notion_url"):
             r.error(qid, "no source.notion_url — ungrounded")
-        if headings and src.get("heading") and src["heading"] not in headings:
-            r.error(qid, f"cites heading {src['heading']!r} not present in knowledge/index.json")
+        if headings and heading and heading not in headings:
+            r.error(qid, f"cites heading {heading!r} not present in knowledge/index.json")
+
+        # The page and the heading must be ONE citation. Both halves resolving
+        # separately is not the same as the pair being real, and a reader who
+        # follows a mismatched pair lands on a page the answer is not on.
+        by_page = ctx.get("page_headings") or {}
+        if by_page and heading:
+            if src.get("page") not in by_page:
+                ground(qid, f"cites page {src.get('page')!r}, which is not in "
+                            "knowledge/index.json")
+            elif heading not in by_page[src["page"]]:
+                ground(qid, f"cites {src['page']!r} → {heading!r}, but that heading is "
+                            f"not on that page. It has: {sorted(by_page[src['page']])}")
+
+        _check_locator(r, qid, src, ctx)
+        _check_coverage(r, qid, q.get("blueprint"), ctx, report=ground, verb="quizzed")
+        _check_anchor(r, qid, q, ctx, ground)
 
         if known_services:
             for name in q.get("services", []):
@@ -372,9 +589,42 @@ def check_quiz(r: Report, path: Path, ctx: dict) -> None:
         r.warn(where, "results.json exists but graded is false — a later run "
                       "will re-grade and re-post. Set graded: true when writing results")
 
-    want = (ctx.get("schedule") or {}).get("quiz", {}).get("depth")
-    if want and depth_seen != want:
-        r.warn(where, f"scenario depth mix {depth_seen} != configured {want}")
+    # A short quiz is the INTENDED outcome of rejecting what the material cannot
+    # anchor -- never an error. What is an error is going short silently: the
+    # learner asked not to be served questions the course does not support, and a
+    # seven-question quiz that says nothing is indistinguishable from a broken
+    # generator. Topping up from an easier section is the thing being prevented.
+    sched_quiz = (ctx.get("schedule") or {}).get("quiz") or {}
+    want_n = sched_quiz.get("questions")
+    n = len(questions)
+    short = bool(want_n) and n < want_n
+    if short and not str(quiz.get("short_reason") or "").strip():
+        r.error(where, f"{n} questions, configured {want_n}, and no short_reason — "
+                       "name the sections that could not support one")
+    if want_n and n > want_n:
+        # Always a mistake, and free to catch. Nothing in the design ever wants
+        # more than the configured set.
+        r.error(where, f"{n} questions, configured {want_n}")
+
+    want = sched_quiz.get("depth") or {}
+    if want and n == sum(want.values()):
+        if depth_seen != want:
+            r.warn(where, f"scenario depth mix {depth_seen} != configured {want}")
+    elif want and short:
+        # The configured integers are unreachable on a set that is deliberately
+        # not full, so comparing them would warn every time and train the reader
+        # to ignore it. Under-filling a band on a short set is arithmetic. What
+        # stays worth catching is a band running OVER its share -- specifically
+        # deep, because thin material producing heavy scenarios is the failure
+        # this whole gate exists for.
+        # Union, not want.keys(): a band the config gives no share at all has a
+        # ceiling of zero, and that is exactly the band worth catching.
+        for band in set(want) | set(depth_seen):
+            ceiling = -(-want.get(band, 0) * n // sum(want.values()))  # ceil
+            if depth_seen.get(band, 0) > ceiling:
+                r.warn(where, f"{depth_seen[band]} {band} questions in a set of {n} "
+                              f"— more than the {ceiling} that share of the "
+                              f"configured mix allows")
 
 
 def check_digest(r: Report, path: Path, ctx: dict) -> None:
@@ -397,7 +647,6 @@ def check_digest(r: Report, path: Path, ctx: dict) -> None:
         r.warn(where, "no topics recorded")
         return
 
-    covered = ctx.get("covered_subsections", set())
     headings = ctx.get("headings", set())
 
     seen_components = []
@@ -415,42 +664,11 @@ def check_digest(r: Report, path: Path, ctx: dict) -> None:
             r.error(tid, "no source.notion_url — the citation cannot be linked, "
                          "and the page text cannot be fetched to write from")
 
-        # Locator: a citation may point at a PLACE on the page, and if it does,
-        # that place must exist. Pointing at a page and stopping left the reader
-        # hunting through 200 lines; pointing at an invented sub-heading would be
-        # worse, so the pointer is checked against the page it claims.
-        loc = src.get("locator") or {}
-        if loc:
-            sub = (loc.get("subheading") or "").strip()
-            cache = (ctx.get("page_cache") or {}).get(src.get("page"))
-            if not sub:
-                r.error(tid, "source.locator has no subheading — drop the locator "
-                             "or name the sub-heading to jump to")
-            elif not cache:
-                r.warn(tid, "cannot check the locator: no cached text for "
-                            f"{src.get('page')!r}")
-            else:
-                subs = subheadings(Path("knowledge") / cache, heading or "")
-                if not subs:
-                    r.warn(tid, f"cannot check the locator: {heading!r} has no "
-                                "sub-headings in the cached page, or the page is "
-                                "not hydrated in this environment")
-                elif sub not in subs:
-                    r.error(tid, f"locator points at {sub!r}, which is not under "
-                                 f"{heading!r}. That section has: {subs}")
-            if not (loc.get("look_for") or "").strip():
-                r.warn(tid, "locator names a sub-heading but not what to look at "
-                            "there — name the table, callout or phrase")
+        _check_locator(r, tid, src, ctx)
 
         check_aws_equivalents(r, tid, topic.get("aws_equivalents"), ctx.get("aws_map", {}))
 
-        # Coverage: the subsection must actually be teachable.
-        sub = topic.get("blueprint")
-        if not sub:
-            r.error(tid, "no blueprint subsection recorded")
-        elif covered and sub not in covered:
-            r.error(tid, f"subsection {sub} is not covered by ingested material — "
-                         "the training has not reached it yet, so it must not be taught")
+        _check_coverage(r, tid, topic.get("blueprint"), ctx)
 
         # Repetition: the same section may be taught again, but never from an
         # angle it has already had. That is what makes a second pass worth reading.
