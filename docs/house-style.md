@@ -235,6 +235,13 @@ On the page: _Example: subnets spanning zones_ — the CIDR/zones table.
 `scripts/page_sections.py` lists a section's sub-headings, and `validate.py`
 fails a locator that points at one the page does not have.
 
+**This applies to quiz questions too.** It read as a digest rule for a day, which
+is exactly how long it took the reader to ask where on the page a question came
+from. One difference, and only one: a question posts the locator and holds back
+the line itself. `source.anchor` — the span the keyed answer rests on — is
+revealed in the grading reply, as a block quote, because on a near-verbatim
+question the line *is* the answer. Navigation before, evidence after.
+
 ### A reference to a question is a link
 
 Slack *does* expose per-message permalinks, and every quiz question is its own

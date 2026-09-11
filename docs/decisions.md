@@ -733,3 +733,99 @@ subtly wrong in a way nobody notices until a link lands on nothing. It returns
 The recap is the load-bearing half, not the link. History written before
 `message_ts` existed still gets "Q8 · 10 Sep" plus what the reader picked;
 `validate.py` warns there rather than failing, so old records stay valid.
+
+---
+
+## The facts were sourced; the framing was not
+
+**Found:** 2026-09-11, from the reader's own complaint about a quiz — *"the
+content of the quiz is not what's in the course"*, alongside *"it gives me a link
+but not where to search where this exists."*
+
+Checked before believing it, and the complaint was half wrong in an instructive
+way. **Every one of the ten questions' facts was in the cached material**, several
+near-verbatim: Q6's no-pre-warming claim, Q7's Partner Interconnect conditions,
+Q2's Editor/Viewer split, Q10's perfect forward secrecy. The grounding gate had
+not been bypassed.
+
+What was invented was the **framing wrapped around each fact** — a mobile game
+studio, a service that also processes payment data, an organisation running
+regular red-team exercises. None of it in the material, none of it carrying the
+deciding constraint. Decoration.
+
+**The two complaints are one problem.** The reader could not separate the sourced
+half from the decoration, because the citation stopped at a 200-line page. Given
+no way to check, invented framing is indistinguishable from invented content —
+and the rational response to a source you cannot verify is to distrust all of it.
+That is a stronger argument for followable citations than "it saves scrolling",
+which is how the digest's version of this was justified a day earlier.
+
+### Three things that let it happen
+
+**The quiz never adopted the locator.** House style §7 gained *"say where on the
+page"* that morning, with a working helper, and `check_digest` enforced it.
+`check_quiz` never read `source.locator`. A rule written once for one caller
+reads as a rule about that caller.
+
+**`check_quiz`'s grounding was referential, not semantic.** A non-empty URL, a
+heading in a global flat set, services in the AWS map. A question composed
+entirely from general GCP knowledge satisfies all three perfectly — which is what
+the *"The prose was never sourced"* entry above said, and the fix there was to put
+the page text in front of the model without ever checking that it was used. It
+also never read `blueprint` at all, so a question on an **uncovered** subsection
+validated clean, against rule 3.
+
+**Thin material was quizzable and nothing noticed.** The AI-review page is 419
+words and backs five of the nine sections that make §3.3 covered; its thinnest
+tagged section holds **sixteen words**. Asking for a 4-5 sentence scenario there
+does not risk invention, it *requires* it. The depth mix asked for three deep
+questions a day with no idea what could support one.
+
+### The anchor, and why a paraphrase must fail
+
+Each question now quotes the span its keyed answer rests on, checked verbatim
+against the body of the section it cites. Normalisation is deliberately
+asymmetric: it folds emphasis markers, table pipes, bullets, dash and quote
+variants, line wrapping and case — every one of which differs between how a line
+sits on the page and how it gets quoted — and folds **nothing word-level**. No
+stemming, no synonyms, no edit distance. A single substituted word fails, because
+a paraphrase passing is the exact thing being tested for.
+
+**Where the digest warns, the quiz errors.** A cited page with no cached text is
+a hard failure. The locator is decoration on a citation that was already grounded;
+the anchor *is* the grounding. `daily-quiz` fetches and caches every page it asks
+about, so an absent cache at validate time means the page was never opened. A
+gate that degrades to a warning in the cloud is the *"style gate had never run"*
+failure with a new name, and that one hid two shipped defects for the system's
+whole life.
+
+### A question may not outgrow its source
+
+The thin-material rule is a ratio, not a table: the cited section must hold
+`min_source_ratio` times the words of the question written from it. Measured over
+the twenty questions posted to date, the leanest sits at 1.98x, so 1.5 fails none
+of the system's own history while excluding what cannot be sourced.
+
+The property worth having is that **depth caps itself**. A 16-word section
+affords no four-option question at all; a 51-word one affords bare recall and
+nothing larger. No per-depth floors to tune, and no way to ask for a deep
+scenario from a section that has not got one in it.
+
+### The limit, stated rather than papered over
+
+The gate proves the anchor exists in the section cited. It **cannot** prove the
+keyed answer follows from it, and it cannot prove the scenario stayed
+material-anchored — a question can carry a real anchor and a fabricated game
+studio. That is layer 1's job (`prompts/quiz.md`, `question-spec.md` §1), the same
+division the *"Gaps are planning signal"* entry settled: the prompt rule is
+load-bearing, the check is the backstop.
+
+What changed is that invention became **visible**. The grading reply quotes the
+line back, so the reader checks the question against their own course instead of
+trusting that we did. That was always the point of the citations.
+
+**Rejected:** a mechanical "every noun in the scenario must appear in the
+material" check. It fires on *"Your team"*, *"an on-call group"*, *"several
+projects"* — generic subjects the measured corpus uses everywhere. A gate that
+cries wolf gets argued with and then switched off, which this document already
+says twice.

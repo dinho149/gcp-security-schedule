@@ -8,13 +8,15 @@ stops being offered rather than being visibly wrong.
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from page_sections import parse, subheadings  # noqa: E402
+from page_sections import (  # noqa: E402
+    bodies, parse, section_text, subheadings, words)
 
 H1_PAGE = """# 01 — Virtual private cloud networking
 
@@ -100,3 +102,60 @@ class TestSubheadings(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBodies(unittest.TestCase):
+    """The body is what the anchor and the thin-material gate read."""
+
+    def test_a_section_owns_its_subheadings_prose(self):
+        body = bodies(H1_PAGE)["01 — Virtual private cloud networking"]
+        self.assertIn("Not a navigation target.", body)
+
+    def test_but_not_the_subheading_lines_themselves(self):
+        """House style §7: a heading is a navigation aid, not an exam fact. So a
+        quiz can never anchor a question to one."""
+        body = bodies(H1_PAGE)["01 — Virtual private cloud networking"]
+        self.assertNotIn("What is a VPC?", body)
+        self.assertNotIn("#", body)
+
+    def test_the_next_same_depth_heading_ends_it(self):
+        body = bodies(H1_PAGE)["01 — Virtual private cloud networking"]
+        self.assertNotIn("What is Compute Engine?", body)
+
+    def test_level_relative_on_the_hash_two_page(self):
+        """The AI-review page puts sections at ## with ### children. A parser
+        fixed at one depth returns nothing here, silently."""
+        body = bodies(H2_PAGE)["How AI models work"]
+        self.assertIn("Text.", body)
+        self.assertNotIn("Three forms of AI security", body)
+
+    def test_fenced_content_stays_in_the_body(self):
+        md = "# Real\n\nBefore.\n\n```\n# Not a heading\n```\n"
+        self.assertIn("# Not a heading", bodies(md)["Real"])
+
+
+class TestSectionText(unittest.TestCase):
+    """None means "cannot answer"; "" means "answered: nothing there". A caller
+    that conflates them turns every check that reads the text into a no-op."""
+
+    def test_missing_page_is_none(self):
+        self.assertIsNone(section_text(Path("knowledge/pages/nope.md"), "x"))
+
+    def test_unknown_heading_is_none(self):
+        with tempfile.TemporaryDirectory() as d:
+            page = Path(d) / "p.md"
+            page.write_text(H1_PAGE)
+            self.assertIsNone(section_text(page, "Not a real heading"))
+
+    def test_empty_section_is_empty_string_not_none(self):
+        with tempfile.TemporaryDirectory() as d:
+            page = Path(d) / "p.md"
+            page.write_text("# Empty\n\n# Next\nText.\n")
+            self.assertEqual(section_text(page, "Empty"), "")
+
+    def test_words_counts_the_body(self):
+        with tempfile.TemporaryDirectory() as d:
+            page = Path(d) / "p.md"
+            page.write_text("# H\n\none two three four\n")
+            self.assertEqual(words(page, "H"), 4)
+            self.assertIsNone(words(page, "Nope"))

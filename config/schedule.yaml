@@ -43,6 +43,21 @@ quiz:
     mid: 6
     deep: 3
 
+  # A question may not outgrow the section it comes from. The cited section must
+  # hold at least this many times the words of the question written from it
+  # (scenario + stem + options), or the surplus came from somewhere the reader
+  # cannot check. This caps DEPTH by material without a per-depth table: a
+  # 51-word section still affords a bare-recall question and nothing larger.
+  min_source_ratio: 1.5
+  min_source_ratio_basis: >-
+    Measured over the 20 questions posted to date. The leanest sits at 1.98x its
+    cited section, the median near 3.5x, the richest 21x. 1.5 sits below every
+    question actually posted -- so the gate does not fail the system's own
+    history -- while still excluding the sections that cannot support one: five
+    of the nine sections making 3.3 covered hold under 70 words, and the
+    thinnest holds 16. Re-derive with scripts/page_sections.py --words when the
+    corpus grows.
+
 # Exam readiness. Weekly by default, switching to daily once the covered-material
 # score crosses `daily_from`: far from the exam a daily report restates an
 # unchanged number, and near it the number moves fast enough to be worth watching.
