@@ -45,7 +45,7 @@ Apply `docs/feedback-sdlc.md` → *the trivial rule*, all conditions. Print whic
 condition failed if declining, so the decision is auditable.
 
 Never auto-merge a change to `scripts/`, `tests/`, `reference/question-spec.md`,
-`config/`, `.claude/skills/` or `.gitignore` — those are what make auto-merge
+`config/`, `.agents/skills/` or `.gitignore` — those are what make auto-merge
 safe in the first place.
 
 ## 5. Reply

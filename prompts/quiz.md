@@ -5,9 +5,20 @@ it is measured from 20 real sample questions and overrides intuition.
 
 ## Inputs
 
-`profile.local.yaml` · `knowledge/coverage.md` · `knowledge/index.json` ·
-`knowledge/aws-gcp-map.json` · `reference/exemplars/official-samples.md` ·
-`config/schedule.yaml` (quiz.mix, quiz.depth) · `state.local/mastery.json`
+| Source | Use |
+|---|---|
+| `knowledge/pages/<slug>.md` | **The material itself. Read the pages you are asking about before writing a question.** |
+| `profile.local.yaml` | Altitude, anchors, traps |
+| `reference/exemplars/official-samples.md` | The shape to imitate |
+| `knowledge/coverage.md` | What is askable |
+| `knowledge/index.json` | Sections, headings, Notion URLs, the `cache` path |
+| `knowledge/aws-gcp-map.json` | The only source of AWS equivalences |
+| `config/schedule.yaml` | `quiz.mix`, `quiz.depth` |
+| `state.local/mastery.json` | Weakest and most-due topics |
+
+If a page has no cached text yet, fetch it from its `notion_url` and write the
+cache before writing questions. A question built from a heading and general GCP
+knowledge is ungrounded even when its citation resolves.
 
 ## Sampling
 
@@ -61,6 +72,14 @@ Every question must carry `source.notion_url` and an exact `source.heading` from
 `aws-gcp-map.json`. **Do not invent service names, role IDs or permission
 strings.** If the material will not support a question, write a different one.
 
+Scenarios come from the page's own examples and terms where it has them. A
+question the course could plausibly have asked is worth more than a polished one
+it could not.
+
+AWS equivalences follow `docs/house-style.md` §3: inline and in brackets where
+the map has a counterpart, said in words where the map's cell is blank, and
+**silent** where the service is absent from the map.
+
 ## Self-critique before posting
 
 1. Generate the set.
@@ -71,27 +90,44 @@ strings.** If the material will not support a question, write a different one.
 
 ## Slack rendering
 
-Parent message, then one threaded reply per question.
+Parent message, then **one top-level message per question**. Threads are flat in
+Slack, and there is no longer anything to collapse under a question — the AWS
+analogy reply was retired (`docs/decisions.md`).
 
 **Never add reactions to quiz messages.** The connector posts as the learner, so
 any reaction it adds is indistinguishable from an answer. Question messages go
 out clean.
 
+Four emoji per message, one blank line between blocks, per `docs/house-style.md`
+§5. The option emoji are exempt from the budget.
+
 ```
-<square> Q<n> · §<blueprint> <subsection title>        ⏱ <n>s
+<square> Q<n> · §<blueprint> <subsection title> · ⏱ <n>s
 
 > <scenario, with the deciding constraint bolded>
 
-<stem>
+_<stem>_
 
 1️⃣  <option A>
 2️⃣  <option B>
 3️⃣  <option C>
 4️⃣  <option D>
 
-📖 <Page> → "<heading>"
+<notion_url|<Page> → "<heading>">
 ```
 
-Post the AWS analogy **immediately as a threaded reply** — collapsed by default,
-so it is a spoiler the reader opens deliberately, with no waiting. A 💡 reaction
-records that they used it, which weights the topic for review.
+Record `slack.parent_ts` on the quiz. Grading needs it to find a ✅, and it is
+the only handle on the parent message once the run ends.
+
+### The parent message must not promise a live reply
+
+A ✅ on the parent is read by the **next scheduled run** — the hourly drain, or
+the grade routine. Within the hour, not immediately, and the footer says exactly
+that rather than rounding it up:
+
+```
+React ✅ on this message when you are done. It is picked up within the hour —
+for an instant grade, open a session and say "grade it".
+```
+
+🥱 on a question still means *too basic*, and routes to `feedback-sdlc`.

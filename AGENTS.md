@@ -95,7 +95,7 @@ Routine setup, the one-time Notion migration and the failure playbook live in
 `docs/cloud-routines.md`.
 
 The pinned message in `#gcp-security-exam` lists the commands;
-`.claude/skills/daily-run/SKILL.md` holds the canonical copy and `!help` reprints
+`.agents/skills/daily-run/SKILL.md` holds the canonical copy and `!help` reprints
 it — keep the three identical.
 
 ### Why a cloud runner is possible now
@@ -130,7 +130,7 @@ docs/house-style.md           voice, typography, attention rules
 docs/cloud-routines.md        the five routines, and how to set them up
 reference/question-spec.md    PCSE question anatomy, measured from 20 real samples
 prompts/                      digest / quiz / grading — what the feedback loop edits
-.claude/skills/               the runnable procedures
+.agents/skills/               the runnable procedures
 scripts/                      generators and validators
 ```
 

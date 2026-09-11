@@ -5,8 +5,11 @@ slack:
   # Channel that carries digest, quiz, results and feedback.
   channel_id: "C0XXXXXXXXX"
   channel_name: "#gcp-security-exam"
-  # The learner's Slack user id. Grading counts only THIS user's reactions,
-  # ignoring the bot's own pre-seeded option emoji.
+  # The learner's Slack user id. Grading counts only THIS user's reactions.
+  # There is no bot and nothing is pre-seeded: the connector posts AS this
+  # account, so anything it reacted with would be indistinguishable from a real
+  # answer. See docs/decisions.md. The filter is defence in depth against other
+  # members of a public channel.
   user_id: "U0XXXXXXXXX"
 
 notion:
@@ -24,9 +27,15 @@ github:
   auto_merge_trivial: true
 
 dashboard:
-  # Stable artifact URL, republished after each grading. Blank until first publish.
+  # Stable artifact URL for the readiness dashboard, republished by
+  # exam-readiness. Blank until the first publish, which writes the URL back
+  # here — after that it is the same bookmarkable page every time.
   url: ""
 
 render:
   # Headless Chrome renders digest visuals. Override if Chrome lives elsewhere.
+  # This default is the macOS path. A cloud run is Linux and must resolve its own
+  # binary rather than trust this value -- leave it, and let cloud-bootstrap
+  # override it for the sandbox. If no browser is present there, the digest posts
+  # without visuals and says so; it does not skip the digest.
   chrome_path: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"

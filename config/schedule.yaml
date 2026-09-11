@@ -1,7 +1,13 @@
 # Timing. THIS is the file you edit to retune the day — never a scheduler UI.
 #
-# The scheduled task just ticks. Each tick asks this file what is due, so a
-# change here takes effect on the next tick with no other action.
+# Scheduled cloud routines fire near these times; these decide what is actually
+# *due* when one runs. The two are deliberately separate: a routine is a rough
+# alarm, this file is the rule. A step whose time has passed today and whose
+# output is missing fires, however late the run is — see
+# .claude/skills/daily-run/SKILL.md and .claude/skills/cloud-run/SKILL.md.
+#
+# Editing a time here changes what is due, NOT when a routine wakes. If you move
+# a step more than an hour, move its routine too, or it waits for the next one.
 # Slack shortcut: post `!schedule quiz 17:00` and the agent edits this for you.
 
 timezone: Europe/London
@@ -11,14 +17,10 @@ digest_at: "07:15"
 quiz_at:   "12:30"
 grade_at:  "20:45"
 
-# A tick landing within this many minutes after a step's time still fires it,
-# so a missed tick doesn't skip the day.
+# Labels the post, and nothing more. A run inside this many minutes of a step's
+# time is "on time"; outside it the message notes the delay. It is NOT a gate --
+# gating on it would mean a session at 14:00 skipping the 12:30 quiz entirely.
 grace_minutes: 60
-
-# How often the scheduled task runs. Straight trade: lower = on-demand Slack
-# commands land sooner; higher = fewer wake-ups. For instant, use a session
-# instead of a Slack command.
-tick_minutes: 15
 
 on_demand:
   # Ad-hoc practice still moves mastery scores and spaced-repetition due dates.
@@ -40,3 +42,30 @@ quiz:
     bare: 1
     mid: 6
     deep: 3
+
+# Exam readiness. Weekly by default, switching to daily once the covered-material
+# score crosses `daily_from`: far from the exam a daily report restates an
+# unchanged number, and near it the number moves fast enough to be worth watching.
+readiness:
+  at:   "21:15"          # after grade_at, inside the same grace window
+  days: [fri]            # must be a subset of `days` above, or it never fires
+
+  daily_from: 85         # covered-material score, percent
+  # Revert to weekly only once it falls this far back below, so a score sitting
+  # on the line does not flip the cadence every single day.
+  daily_hysteresis: 5
+
+  # Google does NOT publish a pass mark for this exam. This is OUR bar, and the
+  # report must always say so — "our 75% bar", never "the pass mark". It lives
+  # here rather than in exam-blueprint.yaml because that file's whole warrant is
+  # being a verbatim transcription of the official exam guide.
+  target: 0.75
+  target_basis: >-
+    Self-set. Google's exam guide states question count and duration only; no
+    pass mark is published for the Professional Cloud Security Engineer exam.
+
+  # Below any of these the report says "still too early to decide" rather than
+  # printing a number the data cannot support.
+  min_graded_quizzes: 2
+  min_attempts: 15
+  min_snapshots: 5

@@ -151,11 +151,174 @@ a thread reply joins the same parent thread. The hint would have been visible
 inline, losing the spoiler property that made it worth posting up front.
 
 **Decision.** The quiz parent is one message; each question is its own top-level
-message; each hint is a thread reply under its question. Threads collapse by
-default, so the hint stays a deliberate click with no waiting, and reactions sit
-on top-level messages where they are easy to see and easy to add.
+message. Reactions then sit on top-level messages, where they are easy to see and
+easy to add, and grading reads them from one place.
 
 Costs 11 messages a day in the channel. Worth it.
+
+**Superseded in part, 2026-09-11:** the hint reply this argument was built around
+no longer exists — see below. Questions stay top-level anyway, now for the
+reaction reason alone.
+
+---
+
+## An analogy that always fires teaches nothing
+
+The hint under each question was **the AWS analogy only** (`prompts/hint.md`), and
+it was written whether or not a counterpart existed. So a third of the time it
+produced hedged filler — *"the two peering options have no clean AWS
+counterpart"* — which asserts a fact nothing backs, on a service Google's own
+comparison table does not list at all.
+
+That table has three states, and only the first two were ever distinguished:
+
+| `aws-gcp-map.json` | Count | Means |
+|---|---|---|
+| non-empty `aws` | 184 | There is a counterpart. Name it. |
+| blank `aws` | 39 | **No counterpart, deliberately.** VPC Service Controls. Say so. |
+| service absent | — | No source. **Say nothing.** |
+
+Shared VPC, IAM, GKE and Dedicated Interconnect are all in the third row. The
+retired hint spoke confidently about all of them.
+
+**Decision.** No analogy thread and no 🔁 marker. An AWS counterpart is named
+inline and in brackets — `Cloud Storage (≈ S3)` — only from the first row, said
+in words for the second, and omitted entirely for the third. `house-style.md` §3.
+
+`aws_equivalents` on each question and topic replaces the free-prose `aws_anchor`
+field, so `validate.py` can check a claim against the table. Free prose could
+assert anything and was checked against nothing.
+
+💡 retired with the thread it reported on. `build_mastery.py` still halves credit
+for `hint_used`, because one historical result carries a true and deleting the
+logic would silently rewrite what that record means.
+
+---
+
+## The tick was never built
+
+`schedule.yaml` set `tick_minutes: 15`. `daily-run/SKILL.md` said "invoked by the
+scheduled task". `validate.py` range-checked the number. **Nothing ever fired
+it** — no cron, no launchd agent, no GitHub Actions schedule, no cloud routine.
+
+Found 2026-09-11, when the learner asked why pressing ✅ on the quiz parent did
+nothing. It had been sitting unread since the day before, next to a 💡 on Q5.
+
+Every reaction-driven and `!`-driven behaviour in this repo was documented and
+unreachable. The two days of history exist because sessions were run by hand.
+
+**A cloud runner cannot fix it.** `config/config.local.yaml`, `profile.local.yaml`,
+`knowledge/` and `state.local/` are gitignored and stay on the laptop, which is
+the whole privacy design. A routine would clone the repo and find no channel id,
+no profile, no material, no mastery scores.
+
+**Decision.** Session-driven, stated as the design rather than left implied.
+`tick_minutes` is gone. The due-ness rule inverted with it: under a 15-minute tick
+a missed `grace_minutes` window was the exception, so gating on the window was
+safe. Sessions open when the learner opens them, so the window is now missed
+almost every time — a session at 14:00 would have silently skipped the 12:30
+quiz. A step now fires when its time has passed today and its output is absent,
+and `grace_minutes` only labels the post on-time or late.
+
+`state.local/last_run.json` is the watermark, so a session reads the channel from
+where the last one stopped instead of re-firing a `!quiz` from three days ago.
+
+The pinned `#gcp-security-exam` message says all of this out loud, because the
+honest version — *"nothing here is live"* — is more useful than a promise of a
+reply that never comes.
+
+**Superseded the same day** by the entry below. The claim that a cloud runner
+*cannot* fix it was wrong, and wrong in an interesting way.
+
+---
+
+## A cloud runner can fix it — connectors are the reason
+
+**Found:** 2026-09-11, asking what it would take to drive this from a phone.
+
+The entry above asserts that a cloud runner would clone the repo and find no
+channel id, no profile, no material, no mastery scores. Every clause of that is
+true. The conclusion drawn from it was not.
+
+**What was missed:** two facts already in this repo, never put together.
+
+1. `docs/privacy.md` already names Notion the durable record — *"Because results
+   cannot be committed, the Notion databases hold the durable record.
+   `state.local/` is a fast local cache that can be rebuilt."* If it can be
+   rebuilt, it can be rebuilt in a sandbox.
+2. `sync-notion` already regenerates the whole of `knowledge/` from Notion. The
+   growth mechanism was also, unnoticed, a rehydration mechanism.
+
+So a cloud run does not need the laptop's files. It needs Notion — which it has,
+because **a Claude Code cloud session runs as the logged-in account and keeps the
+claude.ai connectors.**
+
+**The part worth remembering, because it is counter-intuitive.** The obvious
+"proper" answer — a container on GCP, Cloud Run and Scheduler, state in a bucket
+— *cannot do this at all*, and the blocker has nothing to do with GCP. Anthropic
+documents that `claude setup-token` "can only make model requests, so it can't
+establish Remote Control sessions or fetch claude.ai connectors", and API-key
+auth is the same. Slack and Notion here are account connectors with no bot token
+anywhere, so a container would first have to replace the entire I/O layer: a
+Slack app, a Notion integration, and new client code across six skills. Weeks of
+work to reach somewhere strictly worse.
+
+The managed option is the capable one and the self-hosted option is the
+constrained one, which is the reverse of the usual shape. That is why the
+research went the wrong way for an hour before the question "could I just use the
+Claude mobile app?" turned it around.
+
+**Decision.** Five weekday routines call `cloud-run`: hydrate from Notion, run
+`daily-run` unchanged, dehydrate. `!` commands become real triggers on an hourly
+drain — within the hour, honestly stated, not "live". The laptop stops being the
+runner and becomes the place logic is edited.
+
+**What did not change, and is the reason this is acceptable:** nothing private is
+committed. `leakcheck.py` and `.gitignore` are untouched, the repo stays public,
+and state moves between Notion and an ephemeral sandbox — never into git. The
+privacy boundary held; only the assumption about *where a run happens* was wrong.
+
+**What it cost.** State that existed only on disk had to get a durable home, and
+one piece of it was load-bearing: `slack.parent_ts` and the per-question
+`message_ts` live nowhere but `quiz.json`. A cloud run could have posted a quiz
+it was then permanently unable to grade, because the reactions sit on messages it
+has no handle for. The `📊 Quiz Results` row is now created by `daily-quiz` at
+post time rather than by `grade-quiz` at grading time — a lifecycle change forced
+entirely by that one field.
+
+`sources.local.json` was the second: its `ingested_on` stamps are written once
+and never rewritten, and re-deriving them from a fresh walk would silently reset
+every one to today, making the coverage pace unknowable while looking fine.
+
+---
+
+## The prose was never sourced
+
+Every digest topic and every quiz question was composed from **a heading and a
+service list**. `select_topics.py` returns `{page, heading, notion_url,
+blueprint, services}`; the input tables in `prompts/digest.md` and
+`prompts/quiz.md` listed `index.json`, `coverage.md`, `aws-gcp-map.json` and
+`mastery.json`. Not one of them holds a sentence of the course. `sync-notion`
+read each page in full to record its headings, then discarded the text.
+
+So the citation resolved to a real ingested heading while the prose beneath it
+came from the model's own knowledge of GCP. Found 2026-09-11 via a complaint
+about *voice* — the output "reads very AI generated" — which turned out to be the
+visible symptom of a grounding gap.
+
+This is the limit the `check_digest` entry above already concedes: it "cannot
+verify that a topic's prose stays within what its cited section actually says".
+True, and unfixable by another check. It is very fixable by reading the page.
+
+**Decision.** `sync-notion` writes what it reads to `knowledge/pages/<slug>.md`
+and records the path as `cache`. That text is the **first** input to both prompts,
+and the write path falls back to fetching the page when a cache is missing.
+`validate.py` warns when a page claims `ingested: true` with no cached text —
+which is the first time that flag has meant something checkable.
+
+It tightens rules 2 and 3 rather than loosening them: it is harder to run ahead of
+the material while looking at it. And it is the only real fix for voice, because
+carrying the instructor's own terms is not something a prompt can fake.
 
 ---
 
@@ -219,6 +382,19 @@ are all caught, with zero false positives on the real tree.
 
 ---
 
+## The leak gate caught Python, twice removed
+
+Adding an emoji regex to `validate.py` failed `leakcheck.py` on
+`[\U0001F300-\U0001FAFF]`: `U0` followed by seven uppercase hex is exactly the
+Slack workspace id shape added after a real id reached the public remote.
+
+The entry above says a gate that cries wolf gets ignored. Two changes, because
+either alone would leave the trap set: the escapes are written lowercase, and the
+pattern gained `(?<!\\)` so a Python escape can never match it again. Verified
+both ways — a real id is still caught, the escape is not.
+
+---
+
 ## Gaps are planning signal, never teaching content
 
 The first digest included a topic titled "A gap between your material and the
@@ -269,6 +445,146 @@ Module 3 teaches firewall rule targeting via **network tags** only. Official
 sample question 6 turns on targeting a **service account** instead — precisely
 because tags can be attached by anyone who can manage a VM.
 
-Recorded as a `note` on that section in `knowledge/index.json`. Gaps like this
-are prime digest material: the exam tests them and the training does not cover
-them.
+Recorded as a `note` on that section in `knowledge/index.json`.
+
+**Corrected 2026-09-10:** this entry used to end "gaps like this are prime digest
+material: the exam tests them and the training does not cover them" — the exact
+sentence the *"Gaps are planning signal, never teaching content"* entry above
+identifies as the root cause of the retracted topic. It survived the fix in
+`sync-notion` but not here, so the document argued both sides for a while. A gap
+is planning signal: it surfaces in coverage reporting and in the readiness
+report's "where study pays most", and it is never taught until the material
+lands.
+
+---
+
+## Readiness is two numbers, because either one alone is a lie
+
+A score over answered questions reads ~78% while 39.3% of the exam has never been
+tested at all. A single blended number hides which half is lagging.
+
+So the report always carries both — *on covered material* and *true exam
+readiness* — with `true = on_covered × reachable` as an exact identity. The gap
+between them **is** the remaining course, which makes it the most actionable line
+in the report rather than a footnote.
+
+`validate.check_readiness` rejects a report that posts one without the other.
+
+---
+
+## The mastery prior is the guess rate, and teaching cannot beat it
+
+Every question has exactly four options — measured across all 20 official samples
+and enforced by `validate.OPTIONS_EXACT`. So an unproven topic starts at **0.25**,
+where blind guessing lands, not at zero.
+
+Teaching raises the prior to at most **0.50** (`p₀ = 0.25 + 0.25 × taught`). The
+property that buys is worth stating plainly: **a fully-taught, never-quizzed exam
+is structurally capped at 50% readiness.** That is the honest answer to "am I
+fooling myself by reading digests?"
+
+Teaching is a prior, not a gate. The first quiz asked a §3.3 question and §3.3 had
+never appeared in a digest; gating on taught would have scored a correct answer
+there as zero. Proof beats teaching; teaching only fills the gap where proof is
+absent.
+
+Shrinkage uses `k = 4`, the smallest integer where one lucky correct answer on an
+untaught subsection reads 0.40 — below "proven". At `k = 2` it reads 0.50, which
+already looks like knowledge.
+
+---
+
+## The 75% target is ours, not Google's
+
+Google publishes **no pass mark** for the Professional Cloud Security Engineer
+exam; the official guide states question count and duration only. Asserting one
+would violate rule 2 as directly as inventing a GCP fact.
+
+So `readiness.target` lives in `config/schedule.yaml` with a required
+`target_basis` string saying where it came from, and `validate.py` rejects a
+target without one. It is deliberately **not** in `config/exam-blueprint.yaml`,
+whose entire warrant is being a verbatim transcription of the exam guide — a
+number of ours sitting in that file would be indistinguishable from one of
+Google's within a week.
+
+The report says "our 75% bar", never "the pass mark".
+
+---
+
+## Three ledger bugs, all found by building the thing that reads it
+
+Readiness was the first consumer to care whether the ledger was *right* rather
+than merely well-formed. All three had shipped silently.
+
+**A missing angle claimed `delta`.** `topic.get("angle", "delta")` — and no digest
+had ever recorded an angle, so all four taught sections read `angles_used:
+["delta"]`. Selection believed the AWS-delta pass, the highest-value first pass
+for this reader, was spent everywhere it wasn't. Fixed in three layers:
+`daily-digest` records it, `validate.check_digest` rejects a topic without it, and
+`build_ledger` records the pass without claiming an angle when one is absent.
+
+**Two shapes for "withdrawn", one honoured.** `build_ledger` checked
+`topic["retracted"]`; the 2026-09-11 digest recorded `retractions: [{topic: 4,
+ts: …}]` at top level. Latent rather than active — that topic was *replaced*
+rather than left in `topics[]`, so nothing was actually miscounted — but it would
+inflate coverage the first time a topic was pulled without replacement.
+
+The fix matches on **`ts`, never the topic number.** The first attempt keyed on
+the number and immediately dropped a legitimately taught section, because a
+withdrawn topic is normally replaced and the replacement reuses the number. That
+is the same error as counting the retraction, pointing the other way.
+
+**On-demand quizzes were invisible.** `schedule.yaml` sets
+`on_demand.counts_toward_mastery: true`, but only the bare `quiz.json` was
+globbed, so a second quiz in a day could not be recorded and ad-hoc practice moved
+nothing. On-demand sets are now `quiz-<HHMM>.json` / `results-<HHMM>.json`.
+
+---
+
+## A real Slack user id was public for a month
+
+Found 2026-09-10 while auditing what the readiness feature would expose:
+`.claude/skills/daily-quiz/SKILL.md` contained the learner's actual Slack user id
+in prose, committed in `3f52aa2` and live on `origin/main` of a public repo.
+
+`leakcheck.py` had patterns for Slack *tokens* but none for workspace object ids,
+so it passed the gate every time. An id grants nothing without workspace access,
+but it names a real account — the same boundary as the Notion page ids, and the
+same rule: read them from the gitignored config, never write them into committed
+prose.
+
+Redacted, and `[UCGD]0[A-Z0-9]{7,}` added to `GENERIC_SECRETS`, sharing the
+`ID_ALLOW_PATHS` skip so the `U0XXXXXXXXX` placeholders in `config.example.yaml`
+do not trip it.
+
+The id remains in git history. History on a public repo is permanent, which this
+document already says about Notion ids — the difference is that one was caught
+*before* the first push and this one after.
+
+---
+
+## The readiness gate checks the transcription, not the arithmetic
+
+`check_mastery` does not exist and should not. It would be one script
+re-asserting what another just computed — the tautological gate this repo already
+shipped once, in the clipping check that "passed almost always".
+
+`check_readiness` checks the one part that is model-generated: the posted message
+and the block transcribing numbers into prose. The failures with teeth are
+quoting the covered score as the exam score, and printing a days estimate
+alongside "still too early to decide". Both are cheap to check and impossible to
+catch by rereading, because a drifted report looks exactly like a correct one.
+
+---
+
+## No readiness PNG in v1
+
+The six components in `dashboard/visuals.py` are teaching shapes — none carries a
+scalar or a trend, and `tests/test_visuals.py` requires a demo spec and default
+width for every component, so a seventh is a render function plus three test
+surfaces. A picture of five numbers that mrkdwn already shows is not worth a
+Chrome dependency in an unattended 21:15 job.
+
+The trend lives on the dashboard instead, as inline SVG. Revisit at six weekly
+data points, when a sparkline in the message itself becomes the first thing
+mrkdwn genuinely cannot say.
