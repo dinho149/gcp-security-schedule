@@ -36,6 +36,31 @@ OPT_SPREAD_MAX = 8
 OPT_RATIO_MAX = 2.6
 SENTENCES_MAX = 5
 
+# docs/house-style.md §5. Four per message: the section square and the timer are
+# two, and the ❌/✅ contrast pair spends the rest.
+EMOJI_BUDGET = 4
+
+# Ranges deliberately exclude arrows (U+2190-21FF): "Module 2 -> ..." appears in
+# every citation and is punctuation, not decoration.
+_EMOJI_CHAR = "[\U0001f300-\U0001faff\u2600-\u27BF\u2B00-\u2BFF\u2300-\u23FF]"
+EMOJI_RE = re.compile(
+    r"[0-9#*]\ufe0f?\u20e3"                                  # keycaps: 1 2 3 4
+    rf"|{_EMOJI_CHAR}\ufe0f?(?:\u200d{_EMOJI_CHAR}\ufe0f?)*"
+)
+
+# Not decoration, so not charged to the budget: the answer emoji ARE the
+# interface, and the ballot box is a list bullet that happens to live in a symbol
+# block. The section square is NOT exempt -- it is one of the four, which is what
+# makes the budget concrete enough to write to.
+EMOJI_EXEMPT = {
+    "1\ufe0f\u20e3", "2\ufe0f\u20e3", "3\ufe0f\u20e3", "4\ufe0f\u20e3",
+    "1\u20e3", "2\u20e3", "3\u20e3", "4\u20e3",
+    "\u2610",
+}
+
+LINE_CHARS_MAX = 90
+MESSAGE_LINES_MAX = 12
+
 STEM_FORMS = [
     r"what should you do\??$",
     r"what action should (you|the customer) take.*\??$",
@@ -124,13 +149,44 @@ def check_config(r: Report) -> dict:
                f"grade {times['grade_at']}; the pipeline enforces order regardless, "
                "but this reads oddly")
 
-    tick = sch.get("tick_minutes", 0)
-    if not 1 <= tick <= 120:
-        r.error("schedule", f"tick_minutes={tick} outside 1..120")
-    if tick > sch.get("grace_minutes", 0):
-        r.warn("schedule", "tick_minutes exceeds grace_minutes; a step could be skipped")
-
+    check_readiness_schedule(r, sch)
     return {"blueprint": bp, "schedule": sch}
+
+
+def check_readiness_schedule(r: Report, sch: dict) -> None:
+    """Pure so it is testable without a config on disk."""
+    rd = sch.get("readiness") or {}
+    if not rd:
+        r.error("schedule", "no readiness block — exam-readiness has nothing to fire on")
+        return
+
+    if not re.fullmatch(r"\d{2}:\d{2}", str(rd.get("at") or "")):
+        r.error("schedule", f"readiness.at={rd.get('at')!r} is not HH:MM")
+
+    rdays, days = set(rd.get("days") or []), set(sch.get("days") or [])
+    if not rdays:
+        r.error("schedule", "readiness.days is empty — the report would never fire")
+    elif not rdays <= days:
+        # The check that earns its keep: a report that never fires looks exactly
+        # like a report with nothing to say.
+        r.error("schedule", f"readiness.days {sorted(rdays - days)} fall outside the "
+                            "run days, so no tick ever reaches them")
+
+    target = rd.get("target")
+    if not isinstance(target, (int, float)) or not 0 < target <= 1:
+        r.error("schedule", f"readiness.target={target!r} must be a fraction in 0..1")
+    elif not str(rd.get("target_basis") or "").strip():
+        # Google publishes no pass mark for this exam. An unattributed target
+        # becomes "the pass mark" the first time someone reads it quickly.
+        r.error("schedule", "readiness.target has no target_basis — the target is ours, "
+                            "not Google's, and the file must say so")
+
+    daily = rd.get("daily_from")
+    if not isinstance(daily, (int, float)) or not 0 <= daily <= 100:
+        r.error("schedule", f"readiness.daily_from={daily!r} outside 0..100")
+    elif isinstance(target, (int, float)) and daily <= target * 100:
+        r.warn("schedule", "daily_from is at or below target — the report would switch "
+                           "to daily the moment it says you are ready")
 
 
 def check_index(r: Report, bp: dict) -> dict:
@@ -148,6 +204,15 @@ def check_index(r: Report, bp: dict) -> dict:
         for page in course["material"]["pages"]:
             if page["ingested"] and not page["sections"]:
                 r.warn("index", f"{page['title']!r} marked ingested but has no sections")
+            if page["ingested"] and not (ROOT / "knowledge" / (page.get("cache") or "")).is_file():
+                # The digest and quiz write FROM this text. Without it they compose
+                # from a heading plus general GCP knowledge, which is what made the
+                # output read synthetic -- and leaves a citation resolving to a
+                # section whose prose was never consulted. A warning, not an error:
+                # the existing map predates the field and the write path falls back
+                # to fetching the page.
+                r.warn("index", f"{page['title']!r} is ingested but has no cached text "
+                                "(sync-notion writes knowledge/pages/<slug>.md)")
             if not page["ingested"] and page["sections"]:
                 r.error("index", f"{page['title']!r} has sections but ingested=false")
             for s in page["sections"]:
@@ -262,6 +327,16 @@ def check_quiz(r: Report, path: Path, ctx: dict) -> None:
                 if name.lower() not in known_services:
                     r.error(qid, f"names service {name!r} not in aws-gcp-map.json — possible hallucination")
 
+        check_aws_equivalents(r, qid, q.get("aws_equivalents"), ctx.get("aws_map", {}))
+
+    # A graded quiz whose flag stayed false gets graded again on the next run,
+    # re-posting every explanation. Latent while nothing read the check-mark;
+    # live the moment it does. Found on 2026-09-10, whose results.json existed
+    # and had already fed the readiness report while graded read false.
+    if not quiz.get("graded") and (path.parent / "results.json").exists():
+        r.warn(where, "results.json exists but graded is false — a later run "
+                      "will re-grade and re-post. Set graded: true when writing results")
+
     want = (ctx.get("schedule") or {}).get("quiz", {}).get("depth")
     if want and depth_seen != want:
         r.warn(where, f"scenario depth mix {depth_seen} != configured {want}")
@@ -301,6 +376,11 @@ def check_digest(r: Report, path: Path, ctx: dict) -> None:
             r.error(tid, "no source heading — a topic must be sourced from ingested material")
         elif headings and heading not in headings:
             r.error(tid, f"cites heading {heading!r} not present in knowledge/index.json")
+        if not src.get("notion_url"):
+            r.error(tid, "no source.notion_url — the citation cannot be linked, "
+                         "and the page text cannot be fetched to write from")
+
+        check_aws_equivalents(r, tid, topic.get("aws_equivalents"), ctx.get("aws_map", {}))
 
         # Coverage: the subsection must actually be teachable.
         sub = topic.get("blueprint")
@@ -313,6 +393,10 @@ def check_digest(r: Report, path: Path, ctx: dict) -> None:
         # Repetition: the same section may be taught again, but never from an
         # angle it has already had. That is what makes a second pass worth reading.
         angle = topic.get("angle")
+        if not angle:
+            r.error(tid, "no angle recorded — the ledger cannot tell which pass this "
+                         "was. It used to default to 'delta', silently burning the "
+                         "AWS-delta pass on a section that may never have had one.")
         led_sec = (ctx.get("ledger", {}).get("sections") or {}).get(
             f"{src.get('page')}::{heading}")
         if angle and led_sec and angle in led_sec.get("angles_used", []):
@@ -336,6 +420,147 @@ def check_digest(r: Report, path: Path, ctx: dict) -> None:
                       "for a different shape per topic")
 
 
+def check_aws_equivalents(r: Report, where: str, claims, amap: dict) -> None:
+    """Every asserted GCP->AWS equivalence must appear in Google's own table.
+
+    This replaces a free-prose `aws_anchor` field, which could assert anything and
+    be checked against nothing. It is not the tautological kind of gate this repo
+    has shipped before: the claim is model-generated and the table is not, so a
+    hallucinated counterpart fails here rather than in Slack.
+
+    Absent field == no claim, which keeps records written before it existed valid.
+    """
+    if not claims or not amap:
+        return
+    for c in claims:
+        gcp, aws = (c.get("gcp") or "").strip(), (c.get("aws") or "").strip()
+        if not gcp:
+            r.error(where, "aws_equivalents entry with no gcp service named")
+            continue
+        entry = amap.get(gcp.lower())
+        if entry is None:
+            r.error(where, f"claims an AWS counterpart for {gcp!r}, which is absent "
+                           "from aws-gcp-map.json -- say nothing about AWS instead")
+            continue
+        if not entry:
+            r.error(where, f"claims {aws!r} for {gcp!r}, whose AWS cell is blank. "
+                           "That blank IS the answer: say it has no AWS equivalent")
+            continue
+        if aws and aws.lower() not in entry:
+            r.error(where, f"claims {gcp!r} ~ {aws!r}; the map says {entry!r}")
+
+
+def _messages(text: str) -> list[str]:
+    """Cached post text, one message per `---`-delimited block."""
+    return [b.strip("\n") for b in re.split(r"(?m)^---\s*$", text) if b.strip()]
+
+
+def check_style(r: Report, path: Path, ctx: dict) -> None:
+    """House style over what was actually posted (docs/house-style.md §5).
+
+    Only the countable half. Voice is carried by prompts/ and cannot be entailed
+    from text -- the same division docs/decisions.md settled for teaching beyond
+    the material. Emoji budget and blank-line runs are exact, so they are errors;
+    length is a judgement, so it warns.
+    """
+    where = path.name
+    text = path.read_text()
+
+    for i, msg in enumerate(_messages(text), 1):
+        mid = f"{where} message {i}"
+        lines = msg.split("\n")
+
+        found = [e for e in EMOJI_RE.findall(msg) if e not in EMOJI_EXEMPT]
+        if len(found) > EMOJI_BUDGET:
+            r.error(mid, f"{len(found)} emoji, budget is {EMOJI_BUDGET}: "
+                         f"{' '.join(found)}")
+
+        for n, (a, b) in enumerate(zip(lines, lines[1:]), 1):
+            if not a.strip() and not b.strip():
+                r.error(mid, f"blank line {n} is doubled -- exactly one between blocks")
+                break
+
+        in_fence = False
+        for n, line in enumerate(lines, 1):
+            if line.lstrip().startswith("```"):
+                in_fence = not in_fence
+                continue
+            if in_fence or line.lstrip().startswith("|") or "http" in line:
+                continue
+            if len(line) > LINE_CHARS_MAX:
+                r.warn(mid, f"line {n} is {len(line)} chars; wrap under {LINE_CHARS_MAX}")
+
+        body = [ln for ln in lines if ln.strip()]
+        if len(body) > MESSAGE_LINES_MAX:
+            r.warn(mid, f"{len(body)} non-blank lines; over ~{MESSAGE_LINES_MAX} "
+                        "the overflow belongs in the thread")
+
+
+def check_readiness(r: Report, path: Path, ctx: dict) -> None:
+    """The posted report must say what the script computed.
+
+    The numbers themselves are script-generated and deliberately NOT re-derived
+    here -- that would be one script re-asserting another, the tautological gate
+    this repo has already shipped once. What is checked is the transcription,
+    because a report that drops a headline or rounds the wrong number looks
+    exactly like a correct one to a reader.
+    """
+    where = path.name
+    try:
+        rec = json.loads(path.read_text())
+    except json.JSONDecodeError as e:
+        r.error(where, f"invalid JSON: {e}")
+        return
+
+    posted, src = rec.get("posted"), rec.get("source") or {}
+    if posted is None:
+        # state.local/readiness.json (the snapshot) also ends in readiness.json.
+        r.warn(where, "no posted block — snapshot, not a posted report; skipping")
+        return
+
+    for key in ("headline_true", "headline_covered"):
+        if posted.get(key) is None:
+            r.error(where, f"{key} missing — never post one headline without the "
+                           "other; alone it is a claim about the reachable slice "
+                           "dressed up as a claim about the exam")
+
+    for posted_key, src_key in (("headline_true", "true"),
+                                ("headline_covered", "on_covered")):
+        got, want = posted.get(posted_key), src.get(src_key)
+        if got is None or want is None:
+            continue
+        if round(want * 100) != got:
+            r.error(where, f"{posted_key}={got} but the script computed "
+                           f"{want * 100:.1f}% — the message and the file disagree")
+
+    true, ceiling = src.get("true"), src.get("reachable")
+    if true is not None and ceiling is not None and true > ceiling + 5e-4:
+        r.error(where, f"true readiness {true:.1%} exceeds the coverage ceiling "
+                       f"{ceiling:.1%} — readiness is capped by coverage, and "
+                       "breaking that lies in the flattering direction")
+
+    if posted.get("too_early") != src.get("too_early"):
+        r.error(where, "posted too_early disagrees with the computed estimate")
+    if posted.get("too_early") and posted.get("days_estimate") is not None:
+        r.error(where, "a days estimate was posted alongside 'still too early to "
+                       "decide' — one of the two is wrong")
+    if not posted.get("too_early") and posted.get("confidence") not in \
+            {"low", "medium", "high"}:
+        r.error(where, f"confidence {posted.get('confidence')!r} is not one of "
+                       "low/medium/high")
+
+    want_ids = {s["id"] for s in (ctx.get("blueprint", {}).get("sections") or [])}
+    got_ids = set((posted.get("sections") or {}).keys())
+    if want_ids and got_ids != want_ids:
+        r.error(where, f"per-section breakdown covers {sorted(got_ids)}, expected "
+                       f"{sorted(want_ids)} — a dropped section is invisible to a reader")
+
+    cfg_target = ((ctx.get("schedule") or {}).get("readiness") or {}).get("target")
+    if cfg_target is not None and src.get("target") not in (None, cfg_target):
+        r.error(where, f"report computed against target {src.get('target')} but the "
+                       f"config says {cfg_target}")
+
+
 def main(argv: list[str]) -> int:
     r = Report()
     ctx = check_config(r)
@@ -346,24 +571,43 @@ def main(argv: list[str]) -> int:
 
     amap = ROOT / "knowledge/aws-gcp-map.json"
     if amap.exists():
-        ctx["services"] = {s["gcp"].lower() for s in json.loads(amap.read_text())["services"]}
+        svcs = json.loads(amap.read_text())["services"]
+        ctx["services"] = {s["gcp"].lower() for s in svcs}
+        # Lowercased AWS cell per service. An empty string is meaningful: Google
+        # left that cell blank on purpose, so it means "no counterpart", never
+        # "unknown". check_aws_equivalents relies on the distinction.
+        ctx["aws_map"] = {s["gcp"].lower(): (s.get("aws") or "").lower() for s in svcs}
     else:
         ctx["services"] = set()
+        ctx["aws_map"] = {}
 
     quizzes = [Path(a) for a in argv if a.endswith("quiz.json")]
     digests = [Path(a) for a in argv if a.endswith("digest.json")]
+    reports = [Path(a) for a in argv if a.endswith("readiness.json")]
+    posts = [Path(a) for a in argv if a.endswith((".md",))]
     if not argv:
         quizzes = sorted((ROOT / "state.local/history").glob("*/quiz.json"))
         digests = sorted((ROOT / "state.local/history").glob("*/digest.json"))
+        # history/ only, so the state.local/readiness.json snapshot is never
+        # picked up by the no-arg glob.
+        reports = sorted((ROOT / "state.local/history").glob("*/readiness.json"))
+        posts = sorted((ROOT / "state.local/history").glob("*/digest.md")) + \
+            sorted((ROOT / "state.local/history").glob("*/quiz.md"))
     for q in quizzes:
         ctx["quiz_date"] = q.parent.name
         check_quiz(r, q, ctx)
     for d in digests:
         ctx["digest_date"] = d.parent.name
         check_digest(r, d, ctx)
+    for po in posts:
+        check_style(r, po, ctx)
+    for rd in reports:
+        ctx["readiness_date"] = rd.parent.name
+        check_readiness(r, rd, ctx)
 
     print(f"validate: config + index checked, {len(quizzes)} quiz + "
-          f"{len(digests)} digest file(s)")
+          f"{len(digests)} digest + {len(reports)} readiness + "
+          f"{len(posts)} posted-text file(s)")
     for w in r.warnings:
         print(f"  WARN  {w}")
     for e in r.errors:

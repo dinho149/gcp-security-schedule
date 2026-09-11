@@ -48,6 +48,14 @@ CTX = {
     "headings": {"03 — IAM roles"},
     "schedule": {},
     "services": {"compute engine", "cloud storage", "cloud identity"},
+    # A blank cell is Google leaving the AWS column empty on purpose, which is the
+    # answer rather than missing data -- VPC Service Controls is the real case.
+    "aws_map": {
+        "compute engine": "amazon ec2",
+        "cloud storage": "aws simple storage service (s3)",
+        "cloud identity": "aws iam identity center",
+        "vpc service controls": "",
+    },
 }
 
 
@@ -187,13 +195,21 @@ class TestDigestCoverage(unittest.TestCase):
         return r
 
     def good_topic(self, **over):
-        t = {"n": 1, "blueprint": "1.4", "component": "chain",
+        t = {"n": 1, "blueprint": "1.4", "component": "chain", "angle": "delta",
              "source": {"heading": "03 — IAM roles", "notion_url": "https://x"}}
         t.update(over)
         return t
 
     def test_covered_topic_passes(self):
         self.assertEqual(self.run_digest([self.good_topic()]).errors, [])
+
+    def test_rejects_topic_without_angle(self):
+        """The ledger defaulted a missing angle to 'delta', claiming the
+        highest-value first pass on sections that never had one."""
+        t = self.good_topic()
+        del t["angle"]
+        r = self.run_digest([t])
+        self.assertTrue(any("no angle recorded" in e for e in r.errors), r.errors)
 
     def test_rejects_uncovered_subsection(self):
         r = self.run_digest([self.good_topic(blueprint="4.1")])
@@ -223,3 +239,136 @@ class TestDigestCoverage(unittest.TestCase):
         ])
         self.assertEqual(r.errors, [])
         self.assertTrue(any("repeats visual component" in w for w in r.warnings), r.warnings)
+
+
+class TestAwsEquivalents(unittest.TestCase):
+    """The bracketed "(~ S3)" claims must come from Google's own table.
+
+    They replaced a free-prose aws_anchor field that asserted whatever it liked
+    and was checked against nothing.
+    """
+
+    def assert_fails(self, claims, needle):
+        r = run(mutate(aws_equivalents=claims))
+        self.assertTrue(any(needle in e for e in r.errors),
+                        f"expected {needle!r} in {r.errors}")
+
+    def test_absent_field_is_not_a_claim(self):
+        # Records written before the field existed assert nothing, so they pass.
+        self.assertEqual(run(GOOD).errors, [])
+
+    def test_empty_list_passes(self):
+        r = run(mutate(aws_equivalents=[]))
+        self.assertEqual(r.errors, [])
+
+    def test_pair_in_the_map_passes(self):
+        r = run(mutate(aws_equivalents=[{"gcp": "Cloud Storage", "aws": "S3"}]))
+        self.assertEqual(r.errors, [], f"valid equivalence rejected: {r.errors}")
+
+    def test_hallucinated_counterpart_fails(self):
+        self.assert_fails([{"gcp": "Cloud Storage", "aws": "DynamoDB"}], "the map says")
+
+    def test_service_absent_from_map_fails(self):
+        # Shared VPC, IAM, GKE and Dedicated Interconnect are all absent in real
+        # life; the digest used to write "no clean AWS counterpart" about them,
+        # which asserts a fact nothing backs.
+        self.assert_fails([{"gcp": "Shared VPC", "aws": "RAM"}], "absent")
+
+    def test_blank_cell_claim_fails(self):
+        self.assert_fails([{"gcp": "VPC Service Controls", "aws": "SCPs"}],
+                          "no AWS equivalent")
+
+    def test_entry_without_a_service_fails(self):
+        self.assert_fails([{"aws": "S3"}], "no gcp service named")
+
+
+class TestPostedStyle(unittest.TestCase):
+    """docs/house-style.md §5, over the cached text of what actually went out."""
+
+    def check(self, text) -> validate.Report:
+        r = validate.Report()
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(text)
+            path = Path(f.name)
+        try:
+            validate.check_style(r, path, CTX)
+        finally:
+            path.unlink()
+        return r
+
+    AT_BUDGET = (
+        "\U0001f7e6 1 · Where a custom role can be defined · \u23f1 60s\n"
+        "\n"
+        "Policies inherit down the hierarchy. Where a role is *created* does not.\n"
+        "\n"
+        "\u274c *AWS habit* \u2014 attach a customer-managed policy anywhere\n"
+        "\u2705 *GCP reality* \u2014 defined and granted are separate questions\n"
+    )
+
+    def test_message_at_budget_passes(self):
+        self.assertEqual(self.check(self.AT_BUDGET).errors, [])
+
+    def test_one_emoji_over_budget_fails(self):
+        r = self.check(self.AT_BUDGET + "\n\U0001f3af One more marker.\n")
+        self.assertTrue(any("budget is 4" in e for e in r.errors), r.errors)
+
+    def test_answer_emoji_and_squares_are_exempt(self):
+        # Four option emoji plus the square and timer would blow a naive count,
+        # but they are the interface and the colour language, not decoration.
+        r = self.check(
+            "\U0001f7e9 _Q5_ · \u00a72.2 Boundary segmentation · \u23f1 60s\n"
+            "\n"
+            "_What should you do?_\n"
+            "\n"
+            "1\ufe0f\u20e3  Use Shared VPC to share the subnets\n"
+            "2\ufe0f\u20e3  Set up VPC peering between every pair\n"
+            "3\ufe0f\u20e3  Configure Cloud VPN tunnels between projects\n"
+            "4\ufe0f\u20e3  Enable Private Google Access on the subnets\n"
+        )
+        self.assertEqual(r.errors, [], r.errors)
+
+    def test_arrows_are_not_emoji(self):
+        # Every citation contains "->"; counting it would fail every message.
+        r = self.check("\U0001f7e6 One \u2192 two \u2192 three \u2192 four \u2192 five\n")
+        self.assertEqual(r.errors, [], r.errors)
+
+    def test_doubled_blank_line_fails(self):
+        r = self.check("\U0001f7e6 Title\n\n\nBody after two blanks.\n")
+        self.assertTrue(any("doubled" in e for e in r.errors), r.errors)
+
+    def test_messages_are_counted_separately(self):
+        # Three emoji each, six across the file: per-message, not per-file.
+        one = "\U0001f7e6 a \u23f1 b \u274c c\n"
+        r = self.check(one + "\n---\n\n" + one)
+        self.assertEqual(r.errors, [], r.errors)
+
+    def test_long_message_warns_but_does_not_fail(self):
+        r = self.check("\U0001f7e6 Title\n" + "\n".join(f"line {i}" for i in range(20)))
+        self.assertEqual(r.errors, [])
+        self.assertTrue(any("belongs in the thread" in w for w in r.warnings), r.warnings)
+
+
+class TestGradedFlag(unittest.TestCase):
+    """A graded quiz whose flag stayed false gets graded twice.
+
+    Latent while nothing read the check-mark on the quiz parent; live the moment
+    something does. The 2026-09-10 quiz shipped in exactly that state.
+    """
+
+    def warns(self, graded, with_results=True) -> bool:
+        d = Path(tempfile.mkdtemp())
+        if with_results:
+            (d / "results.json").write_text("{}")
+        (d / "quiz.json").write_text(json.dumps({"questions": [GOOD], "graded": graded}))
+        r = validate.Report()
+        validate.check_quiz(r, d / "quiz.json", CTX)
+        return any("re-grade" in w for w in r.warnings)
+
+    def test_results_without_the_flag_warns(self):
+        self.assertTrue(self.warns(graded=False))
+
+    def test_flag_set_is_silent(self):
+        self.assertFalse(self.warns(graded=True))
+
+    def test_ungraded_quiz_with_no_results_is_silent(self):
+        self.assertFalse(self.warns(graded=False, with_results=False))

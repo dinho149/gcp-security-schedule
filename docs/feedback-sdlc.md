@@ -1,6 +1,6 @@
 # Feedback loop
 
-Slack feedback → validated → GitHub issue → PR → merged → live on the next tick.
+Slack feedback → validated → GitHub issue → PR → merged → live on the next run.
 
 The point is that the system improves without you opening an editor, while
 staying reviewable and revertable.
@@ -25,7 +25,7 @@ staying reviewable and revertable.
 4. **Merge.** Auto-merge if trivial (below), otherwise wait for review.
 5. **Reply.** Post issue and PR links, and say whether it auto-merged.
 
-Because every tick begins with `git pull`, a merged change is live immediately.
+Because every run begins with `git pull`, a merged change is live from the next one.
 
 ## 🥱 is different
 

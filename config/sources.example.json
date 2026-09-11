@@ -1,5 +1,8 @@
 {
   "_note": "Shape of knowledge/sources.local.json, which is gitignored because it describes a private Notion workspace. The sync-notion skill writes the real one.",
+  "_ingested_on": "Date a page was first read, written once by sync-notion and never rewritten. It is what lets the readiness estimate measure how fast you are actually getting through the course; without it the coverage rate is unknowable and the estimate refuses. Pages ingested before this field existed keep null, meaning 'before the measurement window' -- they set the level of coverage but not the rate.",
+  "_cache": "Path under knowledge/ holding the page's prose, written by sync-notion when it reads the page. It is what digest and quiz actually write from -- without it they compose from a heading plus general GCP knowledge, which reads synthetic and weakens rule 2. A page with ingested=true and no cache is a claim with no evidence, and validate.py warns.",
+  "_expected_exam_tags": "Planning-only guess at what an un-ingested page will cover, used to answer 'how much would ingesting this pull the estimate in?'. Same class of object as coverage.md's add-next list: NEVER citable and never teachable, and excluded from coverage by construction, which is what keeps CLAUDE.md rule 3 intact.",
   "root": {
     "title": "Professional Cloud Security Engineer",
     "url": "https://app.notion.com/p/<page-id>"
@@ -22,6 +25,8 @@
             "title": "<module page title>",
             "url": "https://app.notion.com/p/<page-id>",
             "ingested": true,
+            "ingested_on": "2026-09-10",
+            "cache": "pages/<page-title-slug>.md",
             "quiz_questions": 3,
             "sections": [
               {
@@ -36,6 +41,8 @@
             "title": "<a page you know exists but have not read>",
             "url": "https://app.notion.com/p/<page-id>",
             "ingested": false,
+            "ingested_on": null,
+            "expected_exam_tags": ["3.1"],
             "sections": []
           }
         ]

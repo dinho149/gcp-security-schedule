@@ -7,12 +7,21 @@ explicitly the preparation for it: cover the topics the quiz will draw from.
 
 | Source | Use |
 |---|---|
+| `knowledge/pages/<slug>.md` | **The material itself. Read the page before writing about it.** |
 | `profile.local.yaml` | **Read first.** Altitude, anchors, traps |
 | `knowledge/coverage.md` | What is teachable |
-| `knowledge/index.json` | Sections, headings, Notion URLs |
+| `knowledge/index.json` | Sections, headings, Notion URLs, the `cache` path |
 | `knowledge/aws-gcp-map.json` | The only source of AWS equivalences |
 | `state.local/mastery.json` | Weakest and most-due topics |
 | `docs/house-style.md` | Voice, typography, attention rules |
+
+The cached page text is first because everything below it is *metadata about* the
+material rather than the material. A topic written from a heading and general GCP
+knowledge is the model's own prose wearing a citation — that is what
+`docs/house-style.md` §2 exists to stop.
+
+If a selected section's page has no cache yet, fetch it from its `notion_url` and
+write the cache before writing the topic.
 
 ## Choosing today's topics — don't. Run the selector.
 
@@ -62,20 +71,30 @@ The quiz still runs that day. Spaced repetition never exhausts.
 The digest is a **sequence of Slack messages**, not one long post. Same shape the
 quiz uses, and for the same reason: threads collapse, so depth stays one click away.
 
+One blank line between blocks, never two, and four emoji per message —
+`docs/house-style.md` §5. The ⏱ sits on the topic's own header line and does
+**not** repeat in the agenda.
+
 ```
-parent      # ⚡ Digest · <date> · ⏱ <total>
+parent      Digest · <date> · ⏱ <total>
+
             > <square> **Today:** <thesis, one line>
+
             _<why it matters for today's quiz>_
-            **1.** <square> <topic> · ⏱ <n>s
-            **2.** <square> <topic> · ⏱ <n>s   <- numbered agenda
+
+            **1.** <square> <topic>
+            **2.** <square> <topic>        <- numbered agenda, no ⏱
             ...
 
-topic 1..N  ## <square> <n> · <title>        ⏱ <n>s     (top-level message)
+topic 1..N  <square> <n> · <title> · ⏱ <n>s        (top-level message)
+
             <content — a different block shape per topic>
-            📖 <Page> → "<exact heading>"
+
+            <notion_url|<Page> → "<exact heading>">
             └─ thread: visual(s), then the deep dive
 
-closing     ## ✅ Before the quiz you can say…
+closing     ✅ Before the quiz you can say…
+
             ☐ <checkable claim>
 ```
 
@@ -111,13 +130,17 @@ it or cut it, rather than inventing filler.
 - **Never define anything in `assume_known`.** This is the top rule. If a chunk
   could appear unchanged in a beginner's course, rewrite it.
 - Open with a trap, contrast or mistake — **never a definition**.
-- Every chunk: a ⏱ estimate, a distinct block shape, and a citation.
+- **Write from the cached page, in its own terms.** Where the instructor has a
+  memorable framing or a specific phrase, use theirs rather than a smoother
+  synonym (§2).
+- Every chunk: a ⏱ estimate on its header line, a distinct block shape, and a citation.
 - `monospace` **only** for service names, roles, permissions, constraints, CLI.
 - Use ❌ AWS habit / ✅ GCP reality for each service touched.
 - Anchor to the reader's own systems using `anchors`, by name.
-- AWS equivalences come from `aws-gcp-map.json` alone. **If a service has no AWS
-  equivalent there, say so explicitly** — that absence is itself the lesson
-  (VPC Service Controls is the standing example).
+- **AWS equivalences follow `docs/house-style.md` §3**: inline and in brackets
+  where `aws-gcp-map.json` carries a counterpart, said in words where its cell is
+  blank (VPC Service Controls is the standing example), and **silent** where the
+  service is absent from the map. No standalone analogy line.
 - Depth goes in the thread, never inline. Keep the main read under ~6 minutes.
 - Cite only sections with `ingested: true`.
 - **Never teach beyond the training.** Every topic must be fully sourced from
@@ -135,4 +158,7 @@ it or cut it, rather than inventing filler.
 | Four chunks all bulleted lists | Rotate: table, contrast pair, diagram, checklist. |
 | A claim with no citation | Cut it or find the section. |
 | Reads like documentation | It should read like a colleague who already knows what you know. |
+| Reads like it was written from the heading | It probably was. Open the cached page and rewrite from it. |
+| Every block pivots on an em-dash reversal | At most one per message (§2). Vary the cadence. |
+| An AWS analogy for a service not in the map | Delete the sentence. Silence is correct (§3). |
 | Teaches something the course hasn't reached | Cut it. It is coming in a later module; running ahead is not helping. |

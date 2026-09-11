@@ -48,10 +48,24 @@ GENERIC_SECRETS = [
     # and .gitignore excludes knowledge/ for exactly that reason. Committed code
     # must read ids from the gitignored ingestion map, never hard-code them.
     (re.compile(r"\b[0-9a-f]{32}\b"), "Notion page id"),
+    # Slack workspace object ids -- users (U), channels (C), groups (G), DMs (D).
+    # There were patterns for Slack *tokens* but none for these, so a real user
+    # id sat in a tracked skill file on a public remote from 3f52aa2 until it was
+    # found by an audit rather than by this gate. An id grants nothing without
+    # workspace access, but it names a real person's account: same boundary as
+    # the Notion page ids above, and the same rule -- read them from the
+    # gitignored config, never write them into committed prose.
+    # The negative lookbehind keeps Python's own escapes out of it: "\\U0001F300"
+    # in a character class is U, 0, then seven uppercase hex, and matched every
+    # time. A gate that cries wolf gets ignored -- see docs/decisions.md. A real
+    # id is never written behind a backslash.
+    (re.compile(r"(?<!\\)\b[UCGD]0[A-Z0-9]{7,}\b"), "Slack workspace id"),
 ]
 
-# Placeholder ids in *.example.* files are documentation, not real pages.
+# Placeholder ids in *.example.* files are documentation, not real pages or
+# accounts. Applies to every id-shaped pattern, not just Notion's.
 ID_ALLOW_PATHS = re.compile(r"(^|/)[^/]*\.example\.[a-z]+$|^docs/|^reference/question-spec\.md$")
+ID_LABELS = {"Notion page id", "Slack workspace id"}
 
 # Emails that are fine in a public repo: the git noreply address, documentation
 # placeholders, and Google service-account addresses (which are resource
@@ -138,7 +152,7 @@ def main() -> int:
             for m in pattern.finditer(text):
                 if label == "email address" and EMAIL_ALLOW.search(m.group(0)):
                     continue
-                if label == "Notion page id" and ID_ALLOW_PATHS.search(path):
+                if label in ID_LABELS and ID_ALLOW_PATHS.search(path):
                     continue
                 line = text[: m.start()].count("\n") + 1
                 failures.append(f"SECRET        {path}:{line}\n              -> {label}")
