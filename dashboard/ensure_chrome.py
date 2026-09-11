@@ -135,6 +135,29 @@ def _from_globs() -> tuple[str | None, list[str]]:
     return None, tried
 
 
+def _runnable(path: str) -> bool:
+    """Does this binary actually start?
+
+    `_executable` only asks whether the file bit is set. A downloaded browser on
+    a minimal Linux image is executable and still dead:
+
+        error while loading shared libraries: libglib-2.0.so.0
+
+    Without this check `resolve()` returns that path, reports success, and
+    render.py then fails once per visual with "chrome wrote no file" -- which
+    daily-digest reads as a clipping bug (exit 1, fix your specs) rather than
+    the missing renderer it is (exit 2, post text-only). Measured in a Debian
+    container, not hypothesised.
+    """
+    try:
+        p = subprocess.run([path, "--version"], capture_output=True,
+                           text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return p.returncode == 0 and "error while loading shared libraries" not in (
+        (p.stderr or "") + (p.stdout or ""))
+
+
 def _run(cmd: list[str]) -> subprocess.CompletedProcess | None:
     try:
         return subprocess.run(cmd, capture_output=True, text=True,
@@ -175,30 +198,49 @@ def _install_playwright() -> str | None:
     """Fallback when the sandbox has Python but no node."""
     if not _ok(_run([sys.executable, "-m", "pip", "install", "--quiet", "playwright"])):
         return None
-    if not _ok(_run([sys.executable, "-m", "playwright", "install", "chromium"])):
-        return None
-    found, _ = _from_globs()
-    return found
+    # --with-deps apt-installs the shared libraries the browser needs. It wants
+    # root, which a sandbox has and a laptop does not, so fall back to the plain
+    # install rather than failing outright.
+    for args in (["install", "--with-deps", "chromium-headless-shell"],
+                 ["install", "chromium-headless-shell"],
+                 ["install", "chromium"]):
+        if _ok(_run([sys.executable, "-m", "playwright", *args])):
+            found, _ = _from_globs()
+            if found:
+                return found
+    return None
 
 
-def resolve(install: bool = False, prefer: str | None = None) -> Resolved:
-    """First hit wins. Raises RuntimeError naming everything tried."""
+def resolve(install: bool = False, prefer: str | None = None,
+            verify: bool = True) -> Resolved:
+    """First hit wins. Raises RuntimeError naming everything tried.
+
+    A candidate must both exist and *start*; see `_runnable`. A browser that
+    cannot load its shared libraries is not a browser, and saying so here is
+    what keeps the digest's text-only fallback reachable.
+    """
     tried: list[str] = []
+
+    def accept(path: str, via: str) -> Resolved | None:
+        if verify and not _runnable(path):
+            tried.append(f"  ^ found but will not start (missing libraries?)")
+            return None
+        return Resolved(path, via, tried)
 
     if (p := _configured()):
         tried.append(f"config render.chrome_path ({p})")
-        if _executable(p):
-            return Resolved(p, "config", tried)
+        if _executable(p) and (r := accept(p, "config")):
+            return r
 
     for name in BINARY_NAMES:
         tried.append(f"PATH: {name}")
-        if (p := shutil.which(name)):
-            return Resolved(p, "path", tried)
+        if (p := shutil.which(name)) and (r := accept(p, "path")):
+            return r
 
     found, glob_tried = _from_globs()
     tried += glob_tried
-    if found:
-        return Resolved(found, "glob", tried)
+    if found and (r := accept(found, "glob")):
+        return r
 
     if install:
         # `prefer` lets cloud-bootstrap skip straight to the installer that won
@@ -209,8 +251,8 @@ def resolve(install: bool = False, prefer: str | None = None) -> Resolved:
             installers.sort(key=lambda kv: kv[0] != prefer)
         for via, fn in installers:
             tried.append(f"install: {via}")
-            if (p := fn()):
-                return Resolved(p, via, tried)
+            if (p := fn()) and (r := accept(p, via)):
+                return r
 
     raise RuntimeError(
         "no headless-Chrome binary found. Tried:\n  " + "\n  ".join(tried)

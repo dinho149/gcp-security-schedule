@@ -11,6 +11,7 @@ by default -- it downloads ~100 MB -- and is gated behind an env var.
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -35,7 +36,7 @@ class TestSearchOrder(unittest.TestCase):
 
     def test_configured_path_wins(self):
         with mock.patch.object(ensure_chrome, "_configured", return_value="/bin/sh"):
-            r = ensure_chrome.resolve()
+            r = ensure_chrome.resolve(verify=False)
         self.assertEqual(r.path, "/bin/sh")
         self.assertEqual(r.via, "config")
 
@@ -48,7 +49,7 @@ class TestSearchOrder(unittest.TestCase):
                                if n == "chromium" else None), \
              mock.patch.object(ensure_chrome, "_executable",
                                side_effect=lambda p: str(p) == "/usr/bin/chromium"):
-            r = ensure_chrome.resolve()
+            r = ensure_chrome.resolve(verify=False)
         self.assertEqual(r.via, "path")
         self.assertEqual(r.path, "/usr/bin/chromium")
 
@@ -60,7 +61,7 @@ class TestSearchOrder(unittest.TestCase):
             with mock.patch.object(ensure_chrome, "_configured", return_value=None), \
                  mock.patch.object(ensure_chrome.shutil, "which", return_value=None), \
                  mock.patch.object(ensure_chrome, "SEARCH_GLOBS", (str(shell),)):
-                r = ensure_chrome.resolve()
+                r = ensure_chrome.resolve(verify=False)
             self.assertEqual(r.path, str(shell))
             self.assertEqual(r.via, "glob")
 
@@ -73,8 +74,53 @@ class TestSearchOrder(unittest.TestCase):
                  mock.patch.object(ensure_chrome.shutil, "which", return_value=None), \
                  mock.patch.object(ensure_chrome, "SEARCH_GLOBS",
                                    (f"{td}/chrome/*/chrome-headless-shell",)):
-                r = ensure_chrome.resolve()
+                r = ensure_chrome.resolve(verify=False)
             self.assertEqual(r.path, str(newer))
+
+
+class TestLiveness(unittest.TestCase):
+    """Executable is not the same as runnable.
+
+    A browser downloaded onto a minimal Linux image has its exec bit set and
+    still dies with `error while loading shared libraries: libglib-2.0.so.0`.
+    Accepting it makes render.py fail once per visual with "chrome wrote no
+    file", which daily-digest reads as a clipping bug to fix rather than the
+    missing renderer it is. Found in a Debian container.
+    """
+
+    def test_a_binary_that_will_not_start_is_not_accepted(self):
+        with mock.patch.object(ensure_chrome, "_configured", return_value=None), \
+             mock.patch.object(ensure_chrome.shutil, "which", return_value=None), \
+             mock.patch.object(ensure_chrome, "SEARCH_GLOBS", ("/fake/headless_shell",)), \
+             mock.patch.object(ensure_chrome, "_executable", return_value=True), \
+             mock.patch.object(ensure_chrome, "_runnable", return_value=False), \
+             self.assertRaises(RuntimeError) as cm:
+            ensure_chrome.resolve()
+        self.assertIn("will not start", str(cm.exception))
+
+    def test_the_same_binary_is_accepted_when_it_starts(self):
+        with mock.patch.object(ensure_chrome, "_configured", return_value=None), \
+             mock.patch.object(ensure_chrome.shutil, "which", return_value=None), \
+             mock.patch.object(ensure_chrome, "SEARCH_GLOBS", ("/fake/headless_shell",)), \
+             mock.patch.object(ensure_chrome, "_executable", return_value=True), \
+             mock.patch.object(ensure_chrome, "_runnable", return_value=True):
+            self.assertEqual(ensure_chrome.resolve().via, "glob")
+
+    def test_runnable_rejects_a_missing_library_on_stderr(self):
+        """Some builds print the loader error and still exit 0."""
+        broken = subprocess.CompletedProcess(
+            [], 0, stdout="", stderr="error while loading shared libraries: libglib-2.0.so.0")
+        with mock.patch.object(ensure_chrome.subprocess, "run", return_value=broken):
+            self.assertFalse(ensure_chrome._runnable("/fake/chrome"))
+
+    def test_runnable_accepts_a_real_version_banner(self):
+        ok = subprocess.CompletedProcess([], 0, stdout="Chromium 153.0.8010.36\n", stderr="")
+        with mock.patch.object(ensure_chrome.subprocess, "run", return_value=ok):
+            self.assertTrue(ensure_chrome._runnable("/fake/chrome"))
+
+    def test_runnable_survives_a_binary_that_cannot_exec(self):
+        with mock.patch.object(ensure_chrome.subprocess, "run", side_effect=OSError):
+            self.assertFalse(ensure_chrome._runnable("/fake/chrome"))
 
 
 class TestAbsence(unittest.TestCase):
@@ -112,7 +158,8 @@ class TestAbsence(unittest.TestCase):
                                return_value=None) as pup, \
              mock.patch.object(ensure_chrome, "_install_playwright",
                                return_value="/tmp/chrome") as play:
-            r = ensure_chrome.resolve(install=True, prefer="pip-playwright")
+            r = ensure_chrome.resolve(install=True, prefer="pip-playwright",
+                                      verify=False)
         self.assertEqual(r.via, "pip-playwright")
         play.assert_called_once()
         # The preferred installer won, so the other must never have been tried.

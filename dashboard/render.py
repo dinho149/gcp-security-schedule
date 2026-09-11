@@ -47,7 +47,13 @@ def shoot(chrome: str, html: str, out: Path, width: int) -> None:
         src = Path(f.name)
     try:
         proc = subprocess.run(
-            [chrome, "--headless", "--disable-gpu", "--hide-scrollbars",
+            # --no-sandbox: a cloud sandbox runs as root, and Chrome refuses to
+            # start there without it ("Running as root without --no-sandbox is
+            # not supported"). The sandbox it drops protects against hostile web
+            # content; this renders local HTML that visuals.py generated and
+            # escaped, with no network access -- tests assert that.
+            [chrome, "--headless", "--no-sandbox", "--disable-gpu",
+             "--hide-scrollbars",
              f"--force-device-scale-factor={SCALE}",
              "--default-background-color=ffffffff",
              f"--window-size={width},{RENDER_H}",

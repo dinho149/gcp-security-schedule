@@ -190,6 +190,43 @@ The parser learned something too. The output is `<name>@<version> <path>`, and
 taking the last whitespace-separated token breaks on any install path containing
 a space — `partition(" ")` from the left is correct.
 
+### A downloaded browser is not yet a working browser
+
+Verified in a Debian container, which is the closest thing to the cloud sandbox
+available without one. Three things failed in sequence, none of which a macOS
+laptop can show you:
+
+**The binary would not start.** `error while loading shared libraries:
+libglib-2.0.so.0`. A fetched browser needs system libraries that the download
+does not carry. `playwright install --with-deps` apt-installs them; it wants
+root, which a sandbox has and a laptop does not, so the plain install remains a
+fallback.
+
+**Chrome refuses to run as root without `--no-sandbox`.** Cloud sandboxes and
+containers both run as root. The flag drops a protection aimed at hostile web
+content; this renders local HTML that `visuals.py` generated and escaped, with
+no network access — `tests/test_visuals.py` asserts the no-network part.
+
+**`--path` was not enough; the exec bit lied.** `_executable` asks whether the
+file bit is set, and a dead binary passes that. `resolve()` returned it, reported
+success, and `render.py` then failed once per visual with "chrome wrote no file"
+— which `daily-digest` reads as a **clipping bug worth failing on** (exit 1, go
+fix your specs) rather than the **missing renderer** it is (exit 2, post
+text-only). So a broken sandbox would have produced no digest at all instead of
+a text-only one, which is the exact outcome the fallback exists to prevent.
+
+`_runnable()` now runs `--version` before accepting any candidate, and the
+failure report says `found but will not start`. With all three fixed, a bare
+Debian box goes from nothing to 6/6 rendered PNGs.
+
+### Linux fonts move layout by ~5%, which is why the overflow fixture is 2x
+
+The same specs render 1812x714 on Linux and 1812x758 on macOS — same width,
+about 6% different height. The clipping fixture was sized at 24 rows, which
+overflowed the canvas by 22%. That margin is the same order as the font
+difference. At 40 rows it is 2x, and the test means what it says on both
+platforms.
+
 ### Sorting browser revisions as strings picks a build from 2022
 
 Browser caches are keyed by revision — `131.0.6778.204` — and `sorted(reverse=True)`
