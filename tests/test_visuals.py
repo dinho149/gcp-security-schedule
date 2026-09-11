@@ -79,9 +79,14 @@ class TestComponentHtml(unittest.TestCase):
 
 
 def chrome_available() -> bool:
+    """Probe only -- a test must never trigger a 100 MB download."""
     sys.path.insert(0, str(ROOT / "dashboard"))
-    import render
-    return Path(render.chrome_path()).exists()
+    import ensure_chrome
+    try:
+        ensure_chrome.resolve(install=False)
+    except RuntimeError:
+        return False
+    return True
 
 
 @unittest.skipUnless(chrome_available(), "Chrome not installed (expected in CI)")
@@ -96,7 +101,7 @@ class TestRenderPipeline(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             out = Path(td) / "specs.json"
             out.write_text(json.dumps({"visuals": [spec]}))
-            rc = render.main([str(out), "--out-dir", td])
+            rc = render.main([str(out), "--out-dir", td, "--no-install"])
             self.assertEqual(rc, 0)
 
             pngs = list(Path(td).glob("*.png"))
@@ -123,15 +128,19 @@ class TestRenderPipeline(unittest.TestCase):
         """
         import render
 
+        # 40 rows overflows the 2200px canvas about 2x. 24 rows also overflowed,
+        # but only by 22% -- close enough that a different font stack (CI is
+        # Linux, the laptop is macOS) could plausibly have closed the gap and
+        # turned this into a test that passes by accident.
         rows = [{"habit": f"Habit {i} written long enough to wrap onto several lines",
                  "reality": f"Reality {i} written long enough to wrap onto several lines"}
-                for i in range(24)]
+                for i in range(40)]
         spec = {"component": "contrast", "title": "Overflowing", "rows": rows}
 
         with tempfile.TemporaryDirectory() as td:
             out = Path(td) / "specs.json"
             out.write_text(json.dumps({"visuals": [spec]}))
-            rc = render.main([str(out), "--out-dir", td])
+            rc = render.main([str(out), "--out-dir", td, "--no-install"])
             self.assertEqual(rc, 1, "an overflowing visual must fail the run")
 
 

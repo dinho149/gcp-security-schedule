@@ -141,6 +141,75 @@ A per-pixel loop over ~8M pixels took ~4.5s per image. `ImageChops.difference`
 against a solid sentinel plate does the same work natively: 28.7s → 14.1s for six
 visuals, and the output is pixel-identical.
 
+### Finding the browser is the renderer's job, not the bootstrap's
+
+"Chrome 152 is already installed" was true of the laptop and false of the cloud
+sandbox, so the first cloud digest posted text-only. The fallback worked exactly
+as designed — and the design was still wrong in two ways.
+
+**The probe was too narrow.** It was `which` over four names. A browser installed
+off `PATH` — a puppeteer or playwright cache, `/opt`, `/snap` — reads as no
+browser at all.
+
+**Absence was treated as permanent.** The sandbox already runs `uv pip install`
+on every run, so outbound network was never in question; fetching
+`chrome-headless-shell` is the same class of operation as installing Pillow, not
+a new capability. Ninety seconds against a digest that loses every diagram is not
+a close call.
+
+Resolution moved into `dashboard/ensure_chrome.py`, which `render.py` calls. That
+makes it **lazy**, which is the part that matters: only the digest renders a PNG,
+so only the digest waits for a browser. Doing it in `cloud-bootstrap` made the
+quiz, grading and readiness routines — four of the five — pay for a capability
+none of them use.
+
+What `cloud-bootstrap` keeps is the *cache*, in `control.render_probe`: the
+negative, so a barren sandbox stops re-paying, and the winning installer, so the
+next run skips the route it already knows fails. Not the path — the sandbox is
+discarded after each run, so tomorrow's path is a different one.
+
+**The cache has a 7-day expiry**, and that is load-bearing rather than tidy. The
+sandbox image changes underneath us. A cached negative with no expiry is how
+visuals stay off forever after one bad morning, with nothing in the record to
+explain why.
+
+### The installer defaults to the working directory, which is a public repo
+
+`npx @puppeteer/browsers install` with no `--path` installs into the **current
+working directory**. Run from the repo root — which is where every skill runs
+things — that is 195 MB of Chrome sitting untracked in a public repository, one
+`git add -A` away from being pushed.
+
+Found by running the command rather than reasoning about it; the docs do not
+mention the default. `ensure_chrome.py` now passes `--path` explicitly, a
+regression test asserts the resolved binary is outside the repo, and
+`.gitignore` carries `/chrome-headless-shell/` for the case where someone runs
+the bare command by hand.
+
+The parser learned something too. The output is `<name>@<version> <path>`, and
+taking the last whitespace-separated token breaks on any install path containing
+a space — `partition(" ")` from the left is correct.
+
+### Sorting browser revisions as strings picks a build from 2022
+
+Browser caches are keyed by revision — `131.0.6778.204` — and `sorted(reverse=True)`
+puts `99.0.4844.51` first. A sandbox with two cached revisions would have rendered
+with the older one indefinitely. Fixed by splitting digit runs and comparing them
+numerically; verified against exactly that case.
+
+### "One visual per topic" was asserted three times and enforced zero times
+
+SKILL.md, house-style §8 and `prompts/digest.md` all state it. `validate.py`
+checked only that two topics did not reuse a component, and only warned. So a
+digest that dropped every diagram passed the gate, which is precisely what a
+missing renderer produces.
+
+`digest.json` now carries `visuals.state`, and `validate.py` holds both directions
+to it: `rendered` requires every topic to have a visual, `unavailable` requires a
+reason and forbids any topic claiming one. A text-only digest is now a recorded
+fact with a cause attached, rather than something the reader has to infer from an
+absence.
+
 ---
 
 ## Slack threads are flat, so questions are top-level messages

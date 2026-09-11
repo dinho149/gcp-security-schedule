@@ -186,10 +186,10 @@ class TestDigestCoverage(unittest.TestCase):
         "covered_subsections": {"1.4", "2.3"},
     }
 
-    def run_digest(self, topics):
+    def run_digest(self, topics, **extra):
         r = validate.Report()
         with tempfile.NamedTemporaryFile("w", suffix="digest.json", delete=False) as f:
-            json.dump({"slack": {"topics": topics}}, f)
+            json.dump({"slack": {"topics": topics}, **extra}, f)
             path = Path(f.name)
         try:
             validate.check_digest(r, path, self.CTX)
@@ -242,6 +242,58 @@ class TestDigestCoverage(unittest.TestCase):
         ])
         self.assertEqual(r.errors, [])
         self.assertTrue(any("repeats visual component" in w for w in r.warnings), r.warnings)
+
+
+class TestVisualState(TestDigestCoverage):
+    """A digest must say whether it had a renderer, and then act like it.
+
+    The cloud sandbox has no browser binary, so a text-only digest went from
+    theoretical to routine. "One visual per topic minimum" was asserted in three
+    documents and enforced in none.
+    """
+
+    def run_visuals(self, topics, visuals):
+        return self.run_digest(topics, visuals=visuals)
+
+    def topic(self, **over):
+        return self.good_topic(**over)
+
+    def test_rendered_with_every_topic_visual_passes(self):
+        r = self.run_visuals([self.topic(n=1, visual="topic-1-x")],
+                     {"state": "rendered"})
+        self.assertEqual(r.errors, [])
+
+    def test_rejects_rendered_with_a_topic_missing_its_visual(self):
+        r = self.run_visuals([self.topic(n=1, visual="topic-1-x"),
+                      self.topic(n=2, component="compare")],
+                     {"state": "rendered"})
+        self.assertTrue(any("carry no visual" in e for e in r.errors), r.errors)
+
+    def test_unavailable_needs_a_reason(self):
+        r = self.run_visuals([self.topic()], {"state": "unavailable"})
+        self.assertTrue(any("with no reason" in e for e in r.errors), r.errors)
+
+    def test_unavailable_with_a_reason_passes(self):
+        r = self.run_visuals([self.topic()],
+                     {"state": "unavailable", "reason": "no chrome binary in sandbox"})
+        self.assertEqual(r.errors, [])
+
+    def test_rejects_unavailable_that_still_claims_a_visual(self):
+        r = self.run_visuals([self.topic(visual="topic-1-x")],
+                     {"state": "unavailable", "reason": "no browser"})
+        self.assertTrue(any("one of the two is wrong" in e for e in r.errors), r.errors)
+
+    def test_rejects_an_unknown_state(self):
+        r = self.run_visuals([self.topic()], {"state": "maybe"})
+        self.assertTrue(any("is not 'rendered' or 'unavailable'" in e
+                            for e in r.errors), r.errors)
+
+    def test_warns_when_the_field_is_absent(self):
+        """Records written before the field existed stay valid."""
+        r = self.run_digest([self.topic()])
+        self.assertEqual(r.errors, [])
+        self.assertTrue(any("no visuals.state recorded" in w
+                            for w in r.warnings), r.warnings)
 
 
 class TestAwsEquivalents(unittest.TestCase):

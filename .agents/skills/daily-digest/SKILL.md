@@ -92,11 +92,34 @@ wider `width`); do not post a truncated diagram.
 
 Rendering takes ~2s per visual and needs no browser session, so it runs unattended.
 
-**If no browser binary exists at all** — possible in a cloud sandbox, where
-`cloud-bootstrap` probes for one — post the digest text-only and say the visuals
-are unavailable. Do not skip the digest, and do not describe a diagram that was
-never rendered. A clipped visual is a bug worth failing on; an absent renderer is
-an environment fact, and the words carry the day's teaching on their own.
+`render.py` finds its own browser via `dashboard/ensure_chrome.py`: the configured
+path, then `PATH`, then the places a browser hides when it is not on `PATH`
+(puppeteer and playwright caches, `/opt`, `/snap`), and then — on anything but
+macOS — it downloads `chrome-headless-shell`. In a cloud sandbox pass what
+`control.render_probe` recorded:
+
+    .venv/bin/python dashboard/render.py <spec> --prefer npx-puppeteer
+    .venv/bin/python dashboard/render.py <spec> --no-install   # known-barren sandbox
+
+**If it still finds nothing** it exits 2 with a reason naming everywhere it
+looked. Post the digest text-only and say the visuals are unavailable. Do not
+skip the digest, and do not describe a diagram that was never rendered. A clipped
+visual is a bug worth failing on; an absent renderer is an environment fact, and
+the words carry the day's teaching on their own.
+
+**Record which of the two happened**, as a top-level field in
+`state.local/history/<date>/digest.json`:
+
+```json
+{"visuals": {"state": "rendered"}}
+{"visuals": {"state": "unavailable", "reason": "<what render.py printed>"}}
+```
+
+`validate.py` holds both halves to it: `rendered` requires every topic to carry a
+`visual` id, and `unavailable` requires a reason and forbids any topic claiming
+one. Until this field existed, "one visual per topic minimum" was asserted in
+three documents and enforced in none, so a digest could drop every diagram and
+still pass.
 
 ## Post — a sequence, not one message
 

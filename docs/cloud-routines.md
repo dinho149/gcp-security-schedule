@@ -50,15 +50,25 @@ Open a cloud session from the phone against this repo and check the three things
 the docs do not promise:
 
 ```bash
-which chromium chromium-browser google-chrome chrome-headless-shell
 uv venv .venv && uv pip install --python .venv/bin/python -r requirements.txt
 .venv/bin/python -m unittest discover -s tests
+.venv/bin/python dashboard/ensure_chrome.py --probe-only     # is one already here?
+.venv/bin/python dashboard/ensure_chrome.py --install        # can we fetch one?
 ```
 
 Then publish an Artifact and republish it, confirming the URL is stable — that is
 how the readiness dashboard keeps one bookmarkable address.
 
-If no browser exists, nothing here breaks: digests post text-only and say so.
+The browser check is two questions, not one. `--probe-only` looks everywhere a
+binary hides, including off `PATH` — the original check was a bare `which` over
+four names, which would miss a browser sitting in a puppeteer cache. `--install`
+answers the question that actually decides whether cloud digests get diagrams:
+whether this sandbox has `npx` (or pip) and outbound network. It prints the
+method that won; put that in `control.render_probe.via` so the 07:15 run skips
+straight to it.
+
+If neither works, nothing here breaks: digests post text-only, record
+`visuals.state = "unavailable"` with the reason, and say so in the channel.
 Better to know before the first 07:15.
 
 ### 4. Create the routines

@@ -736,6 +736,48 @@ def check_digest(r: Report, path: Path, ctx: dict) -> None:
         r.warn(where, f"repeats visual component(s) {sorted(dupes)} — house style asks "
                       "for a different shape per topic")
 
+    check_visual_state(r, where, digest, topics)
+
+
+def check_visual_state(r: Report, where: str, digest: dict, topics: list) -> None:
+    """Whether the digest had a renderer, and whether it acted like it.
+
+    "One visual per topic minimum" is asserted in SKILL.md, house-style §8 and
+    prompts/digest.md, and until now was enforced nowhere -- so a digest could
+    quietly drop every diagram and pass. The cloud sandbox made that reachable
+    rather than theoretical: no browser binary means no PNGs.
+
+    Both directions are failures. Claiming visuals and shipping none is the gap
+    above. Posting text-only without saying so leaves the reader to wonder what
+    they are missing, when an absent renderer is a fact worth one sentence.
+    """
+    state = (digest.get("visuals") or {}).get("state")
+
+    if state is None:
+        # Records written before this field existed stay valid.
+        r.warn(where, "no visuals.state recorded — say 'rendered' or 'unavailable' "
+                      "so a text-only digest is a fact and not a guess")
+        return
+
+    if state == "unavailable":
+        if not (digest.get("visuals") or {}).get("reason"):
+            r.error(where, "visuals.state is 'unavailable' with no reason — record "
+                           "what render.py reported, not just that it failed")
+        if any(t.get("visual") for t in topics):
+            r.error(where, "visuals.state is 'unavailable' but a topic carries a "
+                           "visual id — one of the two is wrong")
+        return
+
+    if state != "rendered":
+        r.error(where, f"visuals.state {state!r} is not 'rendered' or 'unavailable'")
+        return
+
+    missing = [str(t.get("n", "?")) for t in topics if not t.get("visual")]
+    if missing:
+        r.error(where, f"topic(s) {', '.join(missing)} carry no visual, but "
+                       "visuals.state is 'rendered' — house style asks for one "
+                       "visual per topic minimum")
+
 
 def check_aws_equivalents(r: Report, where: str, claims, amap: dict) -> None:
     """Every asserted GCP->AWS equivalence must appear in Google's own table.

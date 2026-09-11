@@ -42,3 +42,10 @@ __pycache__/
 .venv/
 venv/
 .env
+
+# A browser fetched into the wrong place. ensure_chrome.py passes --path so this
+# never happens, but `npx @puppeteer/browsers install` run by hand at the repo
+# root defaults to the working directory -- 195 MB of Chrome, untracked, in a
+# public repo. Cheap insurance.
+/chrome-headless-shell/
+/chrome/

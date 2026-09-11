@@ -36,7 +36,7 @@ Under the same root as `📊 Quiz Results` and `📖 Daily Digests`:
 ├── watermark            state.local/last_run.json           (json)
 ├── sources              knowledge/sources.local.json        (json)
 ├── control              {"paused", "force_full", "synced_on",
-│                          "exemplars_file_upload_id"}
+│                          "exemplars_file_upload_id", "render_probe"}
 └── readiness            one line per run: date, on_covered, cadence, too_early
 
 👤 Learner Profile       profile.local.yaml                  (yaml)
@@ -147,16 +147,36 @@ split-brain store. Both are worse than no run.
    signed file URL, not an upload id, and the download tool takes the id. Both
    carriers are verified: a 14K code block round-trips byte-identically, and the
    13K attachment reads back complete.
-9. Resolve `render.chrome_path` for this machine and overwrite the config value.
-   The stored one is the learner's macOS path; the sandbox is Linux. Probe for a
-   binary (`chromium`, `chromium-browser`, `google-chrome`, `chrome-headless-shell`)
-   and use the first that exists.
+9. **Nothing.** Renderer resolution moved out of hydrate and into the renderer
+   itself — `dashboard/ensure_chrome.py`, which `render.py` calls. Do not write
+   `render.chrome_path`; the stored macOS path is treated as a hint and fallen
+   through when it does not exist.
 
-   **If none exists, do not fail the run.** Record that visuals are unavailable;
-   `daily-digest` then posts text-only and says so. A digest without diagrams is
-   worth more than no digest, and this is the one sandbox capability documented
-   only by inference — `chromedriver` is listed as pre-installed, the browser
-   itself is not.
+   This is deliberate laziness. Only the digest renders a PNG, so only the digest
+   should pay for a browser. Resolving in hydrate made the quiz, grading and
+   readiness routines wait on a capability none of them use.
+
+   What hydrate *does* owe the renderer is the cached probe. Read
+   `control.render_probe`:
+
+   ```json
+   {"checked_on": "2026-09-11", "result": "installed", "via": "npx-puppeteer"}
+   ```
+
+   - `result: "unavailable"` and `checked_on` within 7 days → pass `--no-install`
+     to `render.py`. The sandbox has already proved it cannot host a browser;
+     re-paying a three-minute download every morning buys nothing.
+   - a recorded `via` → pass it as `--prefer`, so the resolver goes straight to
+     the installer that worked rather than walking a route it knows fails.
+   - `checked_on` older than 7 days, or absent → probe fresh and rewrite it.
+
+   **The TTL is the load-bearing part.** The sandbox image changes under us, and a
+   cached negative with no expiry is how visuals stay off forever after one bad
+   morning.
+
+   **A missing browser never fails the run.** `render.py` exits 2 with the reason;
+   `daily-digest` posts text-only, records it in `digest.json`, and says so. A
+   digest without diagrams is worth more than no digest.
 
 `knowledge/pages/<slug>.md` is **not** hydrated in bulk. A run cites a handful of
 sections, so digest and quiz fetch the pages they actually need from Notion and
@@ -173,6 +193,7 @@ Write back only what changed, and only what is primary:
 | a `readiness` line, if one posted | `readiness` |
 | `knowledge/sources.local.json` | `sources`, if `sync-notion` ran |
 | today's date as `synced_on` | `control`, if `sync-notion` ran |
+| `render_probe`, if the renderer was resolved this run | `control` |
 | `profile.local.yaml` | `👤 Learner Profile`, if `!known` or 🥱 changed it |
 
 **Never write back** `ledger.json`, `mastery.json`, `readiness.json`,

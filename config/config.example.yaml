@@ -38,9 +38,15 @@ dashboard:
   url: ""
 
 render:
-  # Headless Chrome renders digest visuals. Override if Chrome lives elsewhere.
-  # This default is the macOS path. A cloud run is Linux and must resolve its own
-  # binary rather than trust this value -- leave it, and let cloud-bootstrap
-  # override it for the sandbox. If no browser is present there, the digest posts
-  # without visuals and says so; it does not skip the digest.
+  # Headless Chrome renders digest visuals. This is a HINT, not a requirement:
+  # dashboard/ensure_chrome.py falls through it when it does not exist, then
+  # searches PATH, then the places a browser hides when it is not on PATH, then
+  # downloads one. So the macOS default below is simply ignored on Linux rather
+  # than needing to be overwritten for the sandbox.
   chrome_path: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+
+  # Download chrome-headless-shell (~100 MB) when nothing is installed. Defaults
+  # to on everywhere but macOS, where a laptop already has Chrome. Set false to
+  # keep a sandbox that has already proved barren from re-paying every morning --
+  # though control.render_probe does that automatically, with a 7-day expiry.
+  install: true

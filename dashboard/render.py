@@ -26,11 +26,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import ensure_chrome  # noqa: E402
 import visuals  # noqa: E402
 from PIL import Image, ImageChops  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 SCALE = 2          # retina; Slack displays these on high-DPI screens
 PAD = 18           # breathing room left around the cropped content, in output px
 RENDER_H = 2200    # tall canvas; the crop discards whatever is unused
@@ -39,19 +39,6 @@ RENDER_H = 2200    # tall canvas; the crop discards whatever is unused
 def slug(text: str, fallback: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "-", str(text).lower()).strip("-")
     return s[:48] or fallback
-
-
-def chrome_path() -> str:
-    cfg = ROOT / "config/config.local.yaml"
-    if cfg.exists():
-        try:
-            import yaml
-            data = yaml.safe_load(cfg.read_text()) or {}
-            if p := (data.get("render") or {}).get("chrome_path"):
-                return p
-        except Exception:
-            pass
-    return DEFAULT_CHROME
 
 
 def shoot(chrome: str, html: str, out: Path, width: int) -> None:
@@ -112,6 +99,14 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("spec_file", help='JSON with {"visuals": [...]}')
     ap.add_argument("--out-dir", help="default: <spec-dir>/visuals")
+    # A laptop already has Chrome, so the fetch would be dead weight there. A
+    # Linux sandbox is the case that needs it, and the digest is the only step
+    # that renders -- quiz and grading must never wait on a download.
+    ap.add_argument("--install", action=argparse.BooleanOptionalAction,
+                    default=ensure_chrome.install_default(),
+                    help="download a browser if none is present (default: "
+                         "render.install in config, else on everywhere but macOS)")
+    ap.add_argument("--prefer", help="installer to try first, from a cached probe")
     args = ap.parse_args(argv)
 
     spec_path = Path(args.spec_file)
@@ -127,13 +122,18 @@ def main(argv: list[str]) -> int:
 
     out_dir = Path(args.out_dir) if args.out_dir else spec_path.parent / "visuals"
     out_dir.mkdir(parents=True, exist_ok=True)
-    chrome = chrome_path()
-    if not Path(chrome).exists():
-        print(f"chrome not found at {chrome}\n"
-              f"set render.chrome_path in config/config.local.yaml", file=sys.stderr)
+    try:
+        found = ensure_chrome.resolve(install=args.install, prefer=args.prefer)
+    except RuntimeError as e:
+        # Exit 2 is the signal daily-digest keys off to post text-only and say
+        # so. An absent renderer is an environment fact, not a bug -- but the
+        # reason has to reach the caller, or the digest can only guess at it.
+        print(e, file=sys.stderr)
         return 2
+    chrome = found.path
 
-    print(f"rendering {len(specs)} visual(s) with {Path(chrome).name}")
+    print(f"rendering {len(specs)} visual(s) with "
+          f"{Path(chrome).name} (via {found.via})")
     failures = 0
     for i, spec in enumerate(specs, 1):
         name = spec.get("id") or slug(spec.get("title", ""), f"visual-{i}")
