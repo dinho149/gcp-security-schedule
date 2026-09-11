@@ -23,7 +23,9 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from build_ledger import fingerprint  # noqa: E402  shared so the two cannot disagree
+from build_ledger import fingerprint, miss_for_section  # noqa: E402  shared
+from page_sections import subheadings  # noqa: E402  one parse of a cached page
+from slack_links import PERMALINK_RE  # noqa: E402  one definition of the format
 
 # A question answered wrong may be re-asked verbatim exactly once, and not before
 # this many days. Repeating it sooner tests recall of an answer, not understanding.
@@ -47,6 +49,35 @@ EMOJI_RE = re.compile(
     r"[0-9#*]\ufe0f?\u20e3"                                  # keycaps: 1 2 3 4
     rf"|{_EMOJI_CHAR}\ufe0f?(?:\u200d{_EMOJI_CHAR}\ufe0f?)*"
 )
+
+# docs/house-style.md §5: three or more parallel named items belong on their own
+# lines. The rule is enforced conservatively, because a gate that cries wolf
+# stops being read -- the same reasoning that makes line length a warning.
+#
+# Two forms fail, and both were shipped on 2026-09-11:
+#   "The six elements - a, b, c, d, e, f - are ..."   (a count, then the items)
+#   "... infra, deployment, identity, storage, internet, operational are ..."
+# Note neither has a terminal "and". Requiring one would have missed both.
+ENUM_HARD_ITEMS = 5    # five short items inline is a list, whatever the wording
+ENUM_COUNTED_ITEMS = 3  # three is enough when the sentence names the count
+ENUM_ITEM_WORDS = 5    # each item must read as a noun phrase, not a clause
+ENUM_LEAD_IN_WORDS = 4  # extra room for a lead-in glued to the first item
+
+# Clause boundaries. An inline enumeration is usually fenced off by dashes,
+# a colon or a semicolon, and the fence is not part of an item.
+CLAUSE_RE = re.compile(r"\s+[\u2014\u2013-]\s+|[:;]\s*|(?<=[.!?])\s+")
+# "the six core elements", "three forms of", "4 levels"
+COUNT_RE = re.compile(
+    r"\b(three|four|five|six|seven|eight|nine|ten|[3-9]|10)\b", re.I)
+# "Scope: org, folder, project, resource" -- an enumeration with no conjunction.
+# Warned rather than failed, because the colon form is sometimes a legend.
+ENUM_COLON_RE = re.compile(r":\s*((?:[^,;.]{1,40},\s*){3,}[^,;.!?]{1,40})\s*$")
+
+# Digests posted before this date were never cached, so there is nothing to check
+# them against and never will be. From this date on, a missing cache is an error:
+# check_style globbed */digest.md for the system's whole life and never found
+# one, which is how a run-on enumeration and a bare "Q8" both shipped unchecked.
+CACHE_REQUIRED_FROM = "2026-09-12"
 
 # Not decoration, so not charged to the budget: the answer emoji ARE the
 # interface, and the ballot box is a list bullet that happens to live in a symbol
@@ -200,6 +231,7 @@ def check_index(r: Report, bp: dict) -> dict:
 
     headings: set[str] = set()
     covered: set[str] = set()
+    page_cache: dict[str, str] = {}
     for course in idx.get("courses", []):
         for page in course["material"]["pages"]:
             if page["ingested"] and not page["sections"]:
@@ -215,6 +247,8 @@ def check_index(r: Report, bp: dict) -> dict:
                                 "(sync-notion writes knowledge/pages/<slug>.md)")
             if not page["ingested"] and page["sections"]:
                 r.error("index", f"{page['title']!r} has sections but ingested=false")
+            if page.get("cache"):
+                page_cache[page["title"]] = page["cache"]
             for s in page["sections"]:
                 headings.add(s["heading"])
                 for tag in s["exam_tags"]:
@@ -223,7 +257,8 @@ def check_index(r: Report, bp: dict) -> dict:
                                          f"has unknown exam tag {tag!r}")
                     elif page["ingested"]:
                         covered.add(tag)
-    return {"index": idx, "headings": headings, "covered_subsections": covered}
+    return {"index": idx, "headings": headings, "covered_subsections": covered,
+            "page_cache": page_cache}
 
 
 def check_quiz(r: Report, path: Path, ctx: dict) -> None:
@@ -380,6 +415,33 @@ def check_digest(r: Report, path: Path, ctx: dict) -> None:
             r.error(tid, "no source.notion_url — the citation cannot be linked, "
                          "and the page text cannot be fetched to write from")
 
+        # Locator: a citation may point at a PLACE on the page, and if it does,
+        # that place must exist. Pointing at a page and stopping left the reader
+        # hunting through 200 lines; pointing at an invented sub-heading would be
+        # worse, so the pointer is checked against the page it claims.
+        loc = src.get("locator") or {}
+        if loc:
+            sub = (loc.get("subheading") or "").strip()
+            cache = (ctx.get("page_cache") or {}).get(src.get("page"))
+            if not sub:
+                r.error(tid, "source.locator has no subheading — drop the locator "
+                             "or name the sub-heading to jump to")
+            elif not cache:
+                r.warn(tid, "cannot check the locator: no cached text for "
+                            f"{src.get('page')!r}")
+            else:
+                subs = subheadings(Path("knowledge") / cache, heading or "")
+                if not subs:
+                    r.warn(tid, f"cannot check the locator: {heading!r} has no "
+                                "sub-headings in the cached page, or the page is "
+                                "not hydrated in this environment")
+                elif sub not in subs:
+                    r.error(tid, f"locator points at {sub!r}, which is not under "
+                                 f"{heading!r}. That section has: {subs}")
+            if not (loc.get("look_for") or "").strip():
+                r.warn(tid, "locator names a sub-heading but not what to look at "
+                            "there — name the table, callout or phrase")
+
         check_aws_equivalents(r, tid, topic.get("aws_equivalents"), ctx.get("aws_map", {}))
 
         # Coverage: the subsection must actually be teachable.
@@ -405,6 +467,43 @@ def check_digest(r: Report, path: Path, ctx: dict) -> None:
             if prior and prior[-1] != (ctx.get("digest_date") or ""):
                 r.error(tid, f"already taught from the {angle!r} angle on {prior[-1]} — "
                              "pick an unused angle or a different section")
+
+        # A remediation topic must say WHICH question, and say enough about it
+        # that the reader does not have to scroll back a day. "Q8" alone was the
+        # shipped behaviour and it assumes a memory of last night's quiz.
+        if angle == "remediation":
+            ref = topic.get("question_ref") or {}
+            key = f"{src.get('page')}::{heading}"
+            _fp, q = miss_for_section(ctx.get("ledger") or {}, key)
+            if not ref.get("n"):
+                r.error(tid, "a remediation topic must name the question it is "
+                             "remediating — question_ref.n")
+            elif not (ref.get("recap") or "").strip():
+                r.error(tid, f"question_ref cites Q{ref['n']} with no recap — the "
+                             "number alone means nothing without scrolling back")
+            if ref.get("n") and q is None:
+                r.error(tid, f"cites Q{ref.get('n')} but the ledger records no miss "
+                             f"on {heading!r} — remediate the question actually "
+                             "answered wrong, or pick another angle")
+            elif ref.get("n") and q is not None:
+                occ = q.get("occurrences") or []
+                if not any(o.get("n") == ref.get("n")
+                           and (not ref.get("date") or o.get("date") == ref["date"])
+                           for o in occ):
+                    r.error(tid, f"cites Q{ref['n']} on {ref.get('date')}, which is "
+                                 f"not how {heading!r} was missed — the ledger has "
+                                 f"Q{(q.get('last_miss') or {}).get('n')} on "
+                                 f"{(q.get('last_miss') or {}).get('date')}")
+                has_ts = bool((q.get("last_miss") or {}).get("message_ts"))
+                if has_ts and not ref.get("url"):
+                    r.error(tid, "the ledger has this question's message_ts but the "
+                                 "topic carries no permalink — build it with "
+                                 "scripts/slack_links.py")
+                elif not has_ts:
+                    r.warn(tid, "no message_ts recorded for this question, so it "
+                                "cannot be linked — cite it as 'Q<n> on <date>'")
+            if (url := ref.get("url")) and not PERMALINK_RE.match(url):
+                r.error(tid, f"question_ref.url {url!r} is not a Slack permalink")
 
         # Explicit guard against the failure this check exists for.
         if topic.get("beyond_material") or topic.get("gap"):
@@ -450,9 +549,55 @@ def check_aws_equivalents(r: Report, where: str, claims, amap: dict) -> None:
             r.error(where, f"claims {gcp!r} ~ {aws!r}; the map says {entry!r}")
 
 
+# A line that is exactly this separates one posted message from the next in a
+# cached post file. NOT `---`: house style §5 lists a horizontal rule as
+# in-message typography, so splitting on it would cut one message into two and
+# compute the emoji budget too leniently over each half -- the check would pass
+# a message that breaks the rule it exists to enforce.
+MESSAGE_SEP = "---8<---"
+
+
 def _messages(text: str) -> list[str]:
-    """Cached post text, one message per `---`-delimited block."""
-    return [b.strip("\n") for b in re.split(r"(?m)^---\s*$", text) if b.strip()]
+    """Cached post text, one message per separator-delimited block."""
+    blocks = [b.strip("\n") for b in
+              re.split(rf"(?m)^{re.escape(MESSAGE_SEP)}\s*$", text) if b.strip()]
+    return blocks
+
+
+def _enumeration(line: str) -> tuple[list[str], bool] | None:
+    """(items, hard) for an inline enumeration that should have been a list.
+
+    Splits the line into clauses first, so text on either side of a dash is not
+    mistaken for an item, then looks for a run of short comma-separated noun
+    phrases inside one clause.
+
+    `hard` separates the indefensible from the arguable. Five or more short items
+    run into a sentence is never right. Three or four behind a stated count --
+    "Four levels, bottom up: resources, projects, folders, the organization
+    node" -- is usually worth breaking out but sometimes reads as a chain, so it
+    warns rather than failing. A gate that fails on the arguable case gets
+    argued with, then ignored.
+    """
+    counted = bool(COUNT_RE.search(line))
+    for clause in CLAUSE_RE.split(line):
+        if not clause or "," not in clause:
+            continue
+        items = [i.strip(" \t*_`") for i in clause.split(",")]
+        if any(not i for i in items):
+            continue
+        # The FIRST item may carry a lead-in that no punctuation separated off
+        # -- "The six elements are security foundations, ..." -- so it gets more
+        # room than the rest. Every other item must read as a bare noun phrase,
+        # which is what keeps an ordinary multi-clause sentence from tripping.
+        if len(items[0].split()) > ENUM_ITEM_WORDS + ENUM_LEAD_IN_WORDS:
+            continue
+        if any(len(i.split()) > ENUM_ITEM_WORDS for i in items[1:]):
+            continue
+        if len(items) >= ENUM_HARD_ITEMS:
+            return items, True
+        if counted and len(items) >= ENUM_COUNTED_ITEMS:
+            return items, False
+    return None
 
 
 def check_style(r: Report, path: Path, ctx: dict) -> None:
@@ -489,6 +634,23 @@ def check_style(r: Report, path: Path, ctx: dict) -> None:
                 continue
             if len(line) > LINE_CHARS_MAX:
                 r.warn(mid, f"line {n} is {len(line)} chars; wrap under {LINE_CHARS_MAX}")
+            # Headings, block quotes and Slack link syntax are not prose.
+            # Bullets deliberately stay in scope: a bullet holding six
+            # comma-separated things is the same failure as a sentence holding
+            # them, which is how SAIF's six elements shipped as one line.
+            if line.lstrip().startswith(("#", ">")) or "<" in line:
+                continue
+            if found := _enumeration(line):
+                items, hard = found
+                msg = (f"line {n} runs {len(items)} items into a sentence: "
+                       f"{items} — house style §5 puts three or more parallel "
+                       "items on their own lines")
+                (r.error if hard else r.warn)(mid, msg)
+            elif mc := ENUM_COLON_RE.search(line):
+                listed = [i.strip() for i in mc.group(1).split(",") if i.strip()]
+                if len(listed) >= ENUM_COUNTED_ITEMS + 1:
+                    r.warn(mid, f"line {n} lists {len(listed)} items after a colon: "
+                                f"{listed} — consider one per line")
 
         body = [ln for ln in lines if ln.strip()]
         if len(body) > MESSAGE_LINES_MAX:
@@ -599,6 +761,14 @@ def main(argv: list[str]) -> int:
     for d in digests:
         ctx["digest_date"] = d.parent.name
         check_digest(r, d, ctx)
+        # Without the cached text there is nothing for check_style to read, and
+        # for the system's whole life there never was one: the */digest.md glob
+        # matched nothing, so every posted digest went out unchecked.
+        if not (d.parent / "digest.md").exists():
+            msg = ("no sibling digest.md — the posted text was never cached, so "
+                   "house style was not checked against what actually went out")
+            report = r.error if d.parent.name >= CACHE_REQUIRED_FROM else r.warn
+            report(d.name, msg)
     for po in posts:
         check_style(r, po, ctx)
     for rd in reports:

@@ -55,8 +55,38 @@ angles:
     priority: 0                       # outranks everything when available
 
 # How many topics a digest asks for. Selection may return fewer near exhaustion,
-# which is a signal rather than a failure.
+# which is a signal rather than a failure. Superseded by `mix.topics` below;
+# kept so an unmigrated config still works.
 topics_per_digest: 4
+
+# How a digest is SHAPED, as opposed to how many topics it has.
+#
+# Four topics drawn from one band is what this block exists to stop. On
+# 2026-09-11 the digest shipped three remediation passes and one new section,
+# because remediation ran first and unbounded: a graded quiz with four misses
+# would have left no new ground at all. Misses are the most valuable thing to
+# revisit and the easiest thing to over-serve.
+#
+# Bands fill in `order`, and are mutually exclusive -- a section lands in the
+# first band it qualifies for. `min` is a floor taken on a first pass, `max` a
+# ceiling. The `fresh` and `remediation` ceilings are HARD: overflow defers to
+# the next digest rather than being absorbed, because both are self-replenishing
+# and would otherwise crowd out everything else indefinitely.
+mix:
+  topics: 4
+  order: [fresh, remediation, new, review, synthesis]
+  bands:
+    fresh:       {min: 0, max: 1, hard: true}
+    remediation: {min: 0, max: 2, hard: true}
+    new:         {min: 1, max: 4}
+    review:      {min: 0, max: 4}
+    synthesis:   {min: 0, max: 1}
+  # Bands that give up their slack when another cannot fill its share.
+  absorb: [new, review, synthesis]
+  # How long after `ingested_on` a section still counts as newly landed. Short
+  # deliberately: the point is to reach material while it is the reason the
+  # learner just synced, not to hold a queue of "newish" sections.
+  fresh_window_days: 3
 
 # A section is "stale" and eligible for a second pass after this many days.
 # Prevents teaching the same section twice in one week from different angles.

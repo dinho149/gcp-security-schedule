@@ -11,6 +11,11 @@ slack:
   # answer. See docs/decisions.md. The filter is defence in depth against other
   # members of a public channel.
   user_id: "U0XXXXXXXXX"
+  # Workspace subdomain -- the <name> in https://<name>.slack.com. Used only to
+  # build message permalinks, so a digest can link the question it is
+  # remediating instead of saying "Q8" and leaving you to scroll back a day.
+  # Personal, so the real value lives in config.local.yaml.
+  workspace: "your-workspace"
 
 notion:
   # Root page whose children are courses.

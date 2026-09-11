@@ -181,3 +181,112 @@ class TestOnDemandQuizzes(LedgerCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMissReference(LedgerCase):
+    """The ledger carries enough to LINK and RECAP a miss, not just count it.
+
+    Every quiz question is its own top-level Slack message and `message_ts` was
+    recorded from the first quiz, but nothing ever carried it forward -- so a
+    remediation topic said "Q8" and left the reader to scroll back a day.
+    """
+
+    def quiz(self, date="2026-09-10", questions=None, channel="CTESTCHAN01",
+             message_ts="1789071974.214939", name="quiz.json"):
+        qs = questions or [dict(question(5), message_ts=message_ts)]
+        self.write(date, name, {"slack": {"channel_id": channel,
+                                          "parent_ts": "1789071965.891069"},
+                                "questions": qs})
+
+    def results(self, date="2026-09-10", outcome="wrong", n=5,
+                name="results.json"):
+        self.write(date, name, {"questions": [
+            {"n": n, "outcome": outcome, "hint_used": False,
+             "answered": ["C"], "keyed": ["A"]}]})
+
+    def only(self, led):
+        self.assertEqual(len(led["questions"]), 1)
+        return next(iter(led["questions"].values()))
+
+    def test_records_the_handle_needed_to_link_it(self):
+        self.quiz()
+        self.results()
+        q = self.only(build_ledger.build())
+        occ = q["occurrences"][0]
+        self.assertEqual(occ["message_ts"], "1789071974.214939")
+        self.assertEqual(occ["channel_id"], "CTESTCHAN01")
+        self.assertEqual(occ["set"], "quiz.json")
+        self.assertEqual(occ["n"], 5)
+
+    def test_records_what_the_reader_actually_picked(self):
+        self.quiz()
+        self.results()
+        q = self.only(build_ledger.build())
+        self.assertEqual(q["last_miss"]["answered"], ["C"])
+        self.assertEqual(q["last_miss"]["keyed"], ["A"])
+        self.assertEqual(q["stem"], "What should you do?")
+
+    def test_a_correct_answer_records_no_miss(self):
+        self.quiz()
+        self.results(outcome="correct")
+        self.assertIsNone(self.only(build_ledger.build())["last_miss"])
+
+    def test_last_miss_is_the_most_recent_not_the_first(self):
+        """A digest should recap the answer the reader gave last time, not one
+        they may since have corrected and then got wrong again."""
+        self.quiz(date="2026-09-10", message_ts="1789071974.214939")
+        self.results(date="2026-09-10")
+        self.quiz(date="2026-09-14", message_ts="1789431974.111111")
+        self.results(date="2026-09-14")
+        q = self.only(build_ledger.build())
+        self.assertEqual(q["last_miss"]["date"], "2026-09-14")
+        self.assertEqual(len(q["occurrences"]), 2)
+
+    def test_on_demand_set_records_its_own_name(self):
+        self.quiz(name="quiz-1430.json")
+        self.results(name="results-1430.json")
+        occ = self.only(build_ledger.build())["occurrences"][0]
+        self.assertEqual(occ["set"], "quiz-1430.json")
+
+    def test_history_without_a_message_ts_is_null_not_missing(self):
+        """Pre-message_ts records must keep the same keys, so every consumer
+        degrades the same way instead of raising."""
+        self.quiz(message_ts=None)
+        self.results()
+        q = self.only(build_ledger.build())
+        self.assertIn("message_ts", q["occurrences"][0])
+        self.assertIsNone(q["occurrences"][0]["message_ts"])
+        self.assertIsNotNone(q["last_miss"])
+
+    def test_the_original_fields_are_unchanged(self):
+        self.quiz()
+        self.results()
+        q = self.only(build_ledger.build())
+        self.assertEqual(q["asked"], ["2026-09-10"])
+        self.assertEqual(q["outcomes"], ["wrong"])
+        self.assertFalse(q["retested"])
+
+
+class TestMissForSection(LedgerCase):
+    """Looked up over questions, not cached on the section.
+
+    A section can be quizzed before it is ever taught -- two of the three misses
+    on 2026-09-10 were -- and `sections` holds only what a digest has taught, so
+    a pointer cached there would be null exactly where remediation needs it.
+    """
+
+    def test_finds_a_miss_on_a_never_taught_section(self):
+        self.write("2026-09-10", "quiz.json",
+                   {"slack": {"channel_id": "CTESTCHAN01"},
+                    "questions": [dict(question(5), message_ts="1789071974.214939")]})
+        self.write("2026-09-10", "results.json", {"questions": [
+            {"n": 5, "outcome": "wrong", "answered": ["C"], "keyed": ["A"]}]})
+        led = build_ledger.build()
+        self.assertNotIn(KEY, led["sections"])          # never taught
+        fp, q = build_ledger.miss_for_section(led, KEY)
+        self.assertIsNotNone(q)
+        self.assertEqual(q["last_miss"]["n"], 5)
+
+    def test_no_miss_returns_nothing(self):
+        self.assertEqual(build_ledger.miss_for_section({"questions": {}}, KEY),
+                         (None, None))

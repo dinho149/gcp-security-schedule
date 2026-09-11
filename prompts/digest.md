@@ -12,7 +12,8 @@ explicitly the preparation for it: cover the topics the quiz will draw from.
 | `knowledge/coverage.md` | What is teachable |
 | `knowledge/index.json` | Sections, headings, Notion URLs, the `cache` path |
 | `knowledge/aws-gcp-map.json` | The only source of AWS equivalences |
-| `state.local/mastery.json` | Weakest and most-due topics |
+| `state.local/mastery.json` | Weakest and most-due topics — and what the `review` band ranks on |
+| `state.local/ledger.json` | What was missed, and the handle to link the question |
 | `docs/house-style.md` | Voice, typography, attention rules |
 
 The cached page text is first because everything below it is *metadata about* the
@@ -27,8 +28,13 @@ write the cache before writing the topic.
 
 ```bash
 .venv/bin/python scripts/build_ledger.py          # what has already been said
+.venv/bin/python scripts/build_mastery.py         # what is due for review
 .venv/bin/python scripts/select_topics.py --json  # what to say today
 ```
+
+`build_mastery.py` is a **prerequisite**, not a nicety: the `review` band ranks
+on `next_due`, and without the file selection silently falls back to bare
+staleness and says so in `mastery_unavailable`.
 
 Topic choice is **not** a judgement call. The selector knows what has been taught
 and from which angle; you do not. It returns the sections, the angle for each, and
@@ -52,6 +58,31 @@ second pass worth reading rather than a re-run.
 **A remediation pass is not a repeat of the delta pass.** If you cannot say
 something genuinely new at the given angle, say so rather than padding — that is a
 signal the selector should have moved on.
+
+### The shape of a digest is not yours to choose either
+
+The selector returns a **mix** across bands, and enforces it. You write what it
+returns; you do not rebalance it.
+
+| Field | What to do with it |
+|---|---|
+| `mix` | The band each topic came from. `fresh`, `remediation`, `new`, `review`, `synthesis` |
+| `deferred` | Misses that did not fit today's cap. **Name them in one line of the closing message** — they are queued, not dropped |
+| `unfilled_floors` | A band that could not be filled. `["new"]` means there is no new ground left: **say so out loud** |
+| `fresh_slot` | When `filled`, the agenda entry gets `_(just ingested)_` — in words, not an emoji, because §5's budget is already spent |
+
+On 11 Sep three of four topics were remediation, because remediation used to run
+first and unbounded. At most two now are. A day with five misses defers three of
+them rather than becoming a revision session — which is why `deferred` has to be
+said rather than swallowed.
+
+Each `remediation` topic carries a `miss` block: the question number, the date,
+the `message_ts`, and what the reader actually answered. Turn it into a link and
+a recap per `docs/house-style.md` §7:
+
+```bash
+.venv/bin/python scripts/slack_links.py --date <date> --n <n>
+```
 
 ### When the selector returns nothing (phase E)
 
@@ -91,7 +122,11 @@ topic 1..N  <square> <n> · <title> · ⏱ <n>s        (top-level message)
             <content — a different block shape per topic>
 
             <notion_url|<Page> → "<exact heading>">
+            On the page: _<sub-heading>_ — <the table / callout to read>
             └─ thread: visual(s), then the deep dive
+
+            remediation topics also carry, above the content:
+            <permalink|Q<n> · <date>> asked <one clause>. You picked _"<option>"_.
 
 closing     ✅ Before the quiz you can say…
 
@@ -141,6 +176,13 @@ it or cut it, rather than inventing filler.
   where `aws-gcp-map.json` carries a counterpart, said in words where its cell is
   blank (VPC Service Controls is the standing example), and **silent** where the
   service is absent from the map. No standalone analogy line.
+- **Three or more parallel items go one per line**, never run into a sentence
+  (`docs/house-style.md` §5). Where the cached page already lists them as
+  headings or bullets, follow its structure.
+- **Point at a place, not just a page.** Add the locator line under every
+  citation whose section has sub-headings — `scripts/page_sections.py` lists
+  them, and validate.py rejects one the page does not have.
+- **A past question is a link plus a recap**, never a bare `Q8` (§7).
 - Depth goes in the thread, never inline. Keep the main read under ~6 minutes.
 - Cite only sections with `ingested: true`.
 - **Never teach beyond the training.** Every topic must be fully sourced from
@@ -160,5 +202,8 @@ it or cut it, rather than inventing filler.
 | Reads like documentation | It should read like a colleague who already knows what you know. |
 | Reads like it was written from the heading | It probably was. Open the cached page and rewrite from it. |
 | Every block pivots on an em-dash reversal | At most one per message (§2). Vary the cadence. |
+| Six things listed inside one sentence | One per line. The page already structured them (§5). |
+| A citation that stops at the page | Add the sub-heading and what to read there (§7). |
+| "Q8 showed…" with no link | Link it and recap it. They read it twelve hours ago (§7). |
 | An AWS analogy for a service not in the map | Delete the sentence. Silence is correct (§3). |
 | Teaches something the course hasn't reached | Cut it. It is coming in a later module; running ahead is not helping. |

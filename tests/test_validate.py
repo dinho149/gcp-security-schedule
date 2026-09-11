@@ -339,8 +339,19 @@ class TestPostedStyle(unittest.TestCase):
     def test_messages_are_counted_separately(self):
         # Three emoji each, six across the file: per-message, not per-file.
         one = "\U0001f7e6 a \u23f1 b \u274c c\n"
-        r = self.check(one + "\n---\n\n" + one)
+        r = self.check(one + "\n---8<---\n\n" + one)
         self.assertEqual(r.errors, [], r.errors)
+
+    def test_horizontal_rule_inside_a_message_is_not_a_split(self):
+        """`---` is in-message typography (house style §5), not a separator.
+
+        Splitting on it would cut one message in two and compute the emoji
+        budget over each half, passing a message that breaks the very rule the
+        budget exists to enforce.
+        """
+        one = "\U0001f7e6 a \u23f1 b \u274c c\n"
+        r = self.check(one + "\n---\n\n" + one)
+        self.assertTrue(any("emoji" in e for e in r.errors), r.errors)
 
     def test_long_message_warns_but_does_not_fail(self):
         r = self.check("\U0001f7e6 Title\n" + "\n".join(f"line {i}" for i in range(20)))
@@ -372,3 +383,199 @@ class TestGradedFlag(unittest.TestCase):
 
     def test_ungraded_quiz_with_no_results_is_silent(self):
         self.assertFalse(self.warns(graded=False, with_results=False))
+
+
+class TestEnumerationStyle(unittest.TestCase):
+    """SAIF's six core elements shipped as one comma-separated sentence.
+
+    The check has to be conservative: house style asks for a list at three
+    items, but a gate that fails on the arguable case gets argued with and then
+    ignored. Five short items run into a sentence has no defence; four behind a
+    stated count sometimes reads as a chain, so it warns.
+    """
+
+    SHIPPED = ("The six elements — security foundations, detection and response, "
+               "automated defenses, platform controls, feedback loops, business "
+               "context — are not a sequence.")
+
+    def check(self, text) -> validate.Report:
+        r = validate.Report()
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(text)
+            path = Path(f.name)
+        try:
+            validate.check_style(r, path, CTX)
+        finally:
+            path.unlink()
+        return r
+
+    def test_the_sentence_that_shipped_fails(self):
+        r = self.check("\U0001f7e6 Title\n\n" + self.SHIPPED + "\n")
+        self.assertTrue(any("items into a sentence" in e for e in r.errors), r.errors)
+
+    def test_a_lead_in_glued_to_the_first_item_is_still_caught(self):
+        """No dash to separate the lead-in, so the first item carries
+        'The six elements are' with it."""
+        line = ("The six elements are security foundations, detection and response, "
+                "automated defenses, platform controls, feedback loops, business context.")
+        r = self.check("\U0001f7e6 Title\n\n" + line + "\n")
+        self.assertTrue(any("items into a sentence" in e for e in r.errors), r.errors)
+
+    def test_the_same_items_as_a_list_pass(self):
+        items = "\n".join(f"• {i}" for i in
+                          ["security foundations", "detection and response",
+                           "automated defenses", "platform controls",
+                           "feedback loops", "business context"])
+        r = self.check("\U0001f7e6 Title\n\n" + items + "\n")
+        self.assertEqual(r.errors, [], r.errors)
+
+    def test_three_items_are_prose_not_a_violation(self):
+        r = self.check("\U0001f7e6 Title\n\nPolicies inherit through resources, "
+                       "projects and folders.\n")
+        self.assertEqual(r.errors, [], r.errors)
+
+    def test_a_multi_clause_sentence_is_not_an_enumeration(self):
+        r = self.check("\U0001f7e6 Title\n\nIt is billed separately, can have its "
+                       "own owners, and holds resources that each belong to one "
+                       "project.\n")
+        self.assertEqual(r.errors, [], r.errors)
+
+    def test_four_items_behind_a_count_warns_rather_than_fails(self):
+        r = self.check("\U0001f7e6 Title\n\nFour levels, bottom up: resources, "
+                       "projects, folders, the organization node.\n")
+        self.assertEqual(r.errors, [], r.errors)
+        self.assertTrue(any("items into a sentence" in w for w in r.warnings), r.warnings)
+
+    def test_a_table_row_is_not_an_enumeration(self):
+        r = self.check("\U0001f7e6 Title\n\n| a | b | c | d | e | f |\n")
+        self.assertEqual(r.errors, [], r.errors)
+
+    def test_a_citation_line_is_not_an_enumeration(self):
+        r = self.check("\U0001f7e6 Title\n\n<https://app.notion.com/p/x|M3 → "
+                       "\"01 — a, b, c, d, e, f\">\n")
+        self.assertEqual(r.errors, [], r.errors)
+
+
+class TestLocator(TestDigestCoverage):
+    """A citation may point at a place on the page — and if it does, the place
+    has to exist. An invented sub-heading is worse than no locator at all."""
+
+    CTX = dict(TestDigestCoverage.CTX, page_cache={"P": "pages/fake.md"})
+
+    def test_no_locator_is_fine(self):
+        self.assertEqual(self.run_digest([self.good_topic()]).errors, [])
+
+    def test_locator_without_a_subheading_fails(self):
+        t = self.good_topic()
+        t["source"]["locator"] = {"look_for": "the table"}
+        r = self.run_digest([t])
+        self.assertTrue(any("no subheading" in e for e in r.errors), r.errors)
+
+    def test_unresolvable_page_warns_rather_than_fails(self):
+        """A cloud run hydrates only the pages it cites, so an absent cache is
+        normal and must not fail the digest."""
+        t = self.good_topic()
+        t["source"]["page"] = "Unknown Page"
+        t["source"]["locator"] = {"subheading": "Anything", "look_for": "the table"}
+        r = self.run_digest([t])
+        self.assertEqual(r.errors, [], r.errors)
+        self.assertTrue(any("cannot check the locator" in w for w in r.warnings), r.warnings)
+
+
+class TestRemediationReference(TestDigestCoverage):
+    """A remediation topic must name, recap and link the question it corrects."""
+
+    MISS = {"date": "2026-09-10", "set": "quiz.json", "n": 5,
+            "channel_id": "CTESTCHAN01", "message_ts": "1789071974.214939",
+            "outcome": "wrong", "answered": ["C"], "keyed": ["A"]}
+    URL = ("https://a-workspace.slack.com/archives/CTESTCHAN01/"
+           "p1789071974214939")
+
+    def ledger(self, message_ts="1789071974.214939"):
+        miss = dict(self.MISS, message_ts=message_ts)
+        return {"questions": {"fp": {
+            "section": "None::03 — IAM roles", "stem": "Q", "outcomes": ["wrong"],
+            "occurrences": [miss], "last_miss": miss}}}
+
+    def run_one(self, ref, ledger=None):
+        self.CTX = dict(TestDigestCoverage.CTX,
+                        ledger=ledger if ledger is not None else self.ledger())
+        t = self.good_topic(angle="remediation")
+        if ref is not None:
+            t["question_ref"] = ref
+        return self.run_digest([t])
+
+    def good_ref(self, **over):
+        ref = {"n": 5, "date": "2026-09-10", "url": self.URL,
+               "recap": "asked about VPC scope; you picked Global"}
+        ref.update(over)
+        return ref
+
+    def test_a_complete_reference_passes(self):
+        self.assertEqual(self.run_one(self.good_ref()).errors, [])
+
+    def test_missing_reference_fails(self):
+        r = self.run_one(None)
+        self.assertTrue(any("must name the question" in e for e in r.errors), r.errors)
+
+    def test_bare_number_without_a_recap_fails(self):
+        r = self.run_one(self.good_ref(recap="   "))
+        self.assertTrue(any("no recap" in e for e in r.errors), r.errors)
+
+    def test_citing_a_question_that_is_not_the_miss_fails(self):
+        r = self.run_one(self.good_ref(n=99))
+        self.assertTrue(any("not how" in e for e in r.errors), r.errors)
+
+    def test_linkable_but_unlinked_fails(self):
+        r = self.run_one(self.good_ref(url=None))
+        self.assertTrue(any("no permalink" in e for e in r.errors), r.errors)
+
+    def test_malformed_permalink_fails(self):
+        r = self.run_one(self.good_ref(url="https://slack.com/q5"))
+        self.assertTrue(any("not a Slack permalink" in e for e in r.errors), r.errors)
+
+    def test_history_without_a_message_ts_warns_rather_than_fails(self):
+        """Records written before message_ts existed must stay valid: cite the
+        question unlinked rather than failing the digest."""
+        r = self.run_one(self.good_ref(url=None), ledger=self.ledger(message_ts=None))
+        self.assertEqual(r.errors, [], r.errors)
+        self.assertTrue(any("cannot be linked" in w for w in r.warnings), r.warnings)
+
+    def test_a_non_remediation_topic_needs_no_reference(self):
+        self.CTX = dict(TestDigestCoverage.CTX, ledger=self.ledger())
+        self.assertEqual(self.run_digest([self.good_topic()]).errors, [])
+
+
+class TestDigestCacheRequired(unittest.TestCase):
+    """check_style globbed */digest.md for the system's whole life and never
+    found one, so every digest went out unchecked. A missing cache is now an
+    error — dated, because the two existing history entries have none and never
+    will, and a gate that fails on its own state gets switched off."""
+
+    def run_main(self, day):
+        with tempfile.TemporaryDirectory() as d:
+            day_dir = Path(d) / day
+            day_dir.mkdir()
+            (day_dir / "digest.json").write_text(json.dumps(
+                {"slack": {"topics": [{"n": 1, "blueprint": "1.4", "angle": "delta",
+                                       "source": {"heading": "03 — IAM roles",
+                                                  "notion_url": "https://x"}}]}}))
+            r = validate.Report()
+            ctx = dict(TestDigestCoverage.CTX)
+            path = day_dir / "digest.json"
+            validate.check_digest(r, path, ctx)
+            if not (path.parent / "digest.md").exists():
+                msg = "no sibling digest.md"
+                report = (r.error if path.parent.name >= validate.CACHE_REQUIRED_FROM
+                          else r.warn)
+                report(path.name, msg)
+            return r
+
+    def test_after_the_cutover_a_missing_cache_is_an_error(self):
+        r = self.run_main("2026-09-20")
+        self.assertTrue(any("digest.md" in e for e in r.errors), r.errors)
+
+    def test_before_the_cutover_it_only_warns(self):
+        r = self.run_main("2026-09-11")
+        self.assertEqual(r.errors, [], r.errors)
+        self.assertTrue(any("digest.md" in w for w in r.warnings), r.warnings)

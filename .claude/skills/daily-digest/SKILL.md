@@ -17,11 +17,25 @@ file covers the mechanics.
 
    ```bash
    .venv/bin/python scripts/build_ledger.py
+   .venv/bin/python scripts/build_mastery.py
    .venv/bin/python scripts/select_topics.py --json
    ```
 
-   It returns each section, the **angle** to use, and the phase. It knows what has
+   It returns each section, the **angle** to use, and the band. It knows what has
    already been taught and from which angle; you do not.
+
+   `build_mastery.py` is a prerequisite: the `review` band ranks on `next_due`,
+   and without it selection falls back to bare staleness.
+
+   Four fields of the envelope are **content, not diagnostics** — they say
+   something the digest has to say out loud:
+
+   | Field | Say |
+   |---|---|
+   | `mix` | the shape of today: misses, new ground, review |
+   | `deferred` | "two more misses are queued for tomorrow" — one line, closing message |
+   | `unfilled_floors` | `["new"]` means there is no new ground left. Do not pad around it |
+   | `fresh_slot` | mark the agenda entry `_(just ingested)_` |
 
 3. **Open the cached page text for every section the selector returned**
    (`knowledge/pages/<slug>.md`, path in `index.json` as `cache`). Write the
@@ -31,6 +45,18 @@ file covers the mechanics.
    The selector hands you a heading, a URL and a service list. None of that is
    the material. A topic written from it alone is the model's own prose wearing a
    citation, which is the single largest reason the digest reads synthetic.
+
+   While the page is open, pick the **locator** for its citation — the
+   sub-heading the reader should jump to, and the table, callout or phrase to
+   read there (`docs/house-style.md` §7):
+
+   ```bash
+   .venv/bin/python scripts/page_sections.py --page knowledge/<cache> --heading "<heading>"
+   ```
+
+   Record it as `source.locator` on the topic. `validate.py` rejects a
+   sub-heading the page does not actually have. Five of the thirty ingested
+   sections are flat — omit the locator for those rather than inventing one.
 
 4. Write each topic at the angle given. Record the `angle` on every topic in
    `digest.json` — the ledger and the repeat check both depend on it.
@@ -79,7 +105,23 @@ an environment fact, and the words carry the day's teaching on their own.
 3. **Into each topic's thread**: its visual(s), then the deep dive.
    Upload with `slack_get_file_upload_url` → POST bytes → `slack_complete_file_upload`
    with `thread_ts` set to that topic's message.
-4. **Closing message**: the pre-quiz checklist, which ends the run.
+4. **Closing message**: the pre-quiz checklist, plus any `deferred` misses.
+5. **Cache what went out, and validate it before going further**:
+
+   ```bash
+   # every posted message verbatim, in posted order, separated by a line
+   # containing only ---8<---   (NOT ---, which is in-message typography)
+   #   -> state.local/history/<date>/digest.md
+   .venv/bin/python scripts/validate.py \
+       state.local/history/<date>/digest.json state.local/history/<date>/digest.md
+   ```
+
+   **Do not mirror to Notion until this passes.** This step was specified for the
+   system's whole life and never actually done, so `check_style` globbed
+   `*/digest.md`, matched nothing, and every digest ever posted went out
+   unchecked — which is how a run-on list of SAIF's six elements and a bare "Q8"
+   both shipped on 11 Sep. A retracted message must **not** appear in the cache:
+   it is a record of what a reader sees, not of what was attempted.
 
 Record every `message_ts` in `state.local/history/<date>/digest.json` so a later
 `!digest` on the same day can reference what was already covered.
@@ -105,10 +147,7 @@ top-level messages: a visual can only be collapsed under a top-level parent.
    `ts` that exists only on the laptop may as well not exist: `build_ledger.py`
    matches retractions on `ts`, and `!digest` later the same day needs to know
    what already went out. See `cloud-bootstrap`.
-3. Cache the posted message text to `state.local/history/<date>/digest.md`.
-   **This was specified and never actually done**, so there is no record of what
-   went out for 2026-09-10 or 2026-09-11 and nothing for `validate.check_style`
-   to read. One file, all messages, in the order posted.
+3. (The posted text was already cached and validated — Post step 5.)
 4. Record which subsections it covered, so the quiz draws from the same ones.
 
 ## Retraction

@@ -88,6 +88,18 @@ Pages ingested before the field existed keep `"ingested_on": null`, meaning
 "before the measurement window" — they count toward the level of coverage but
 contribute no rate. **Do not backfill a date you do not know.**
 
+**Stamp new sections the same way.** A section added to a page that was already
+ingested carries its own `"ingested_on"`, because the page's stamp is old. The
+digest's `fresh` band reserves a slot for material ingested in the last few days,
+and it reads the section stamp first, falling back to the page's. Without the
+section stamp, material added to an existing module never reads as new and never
+gets that slot.
+
+`null` is the safe value in both places: it means "not fresh", so a stamp you are
+unsure about costs one reserved slot rather than filling the digest with
+arbitrary sections. This is the same reasoning that makes rewriting these stamps
+from a fresh walk a bug — see `cloud-bootstrap`, which must never re-derive them.
+
 On an un-ingested page you may also record `"expected_exam_tags"`: a planning-only
 guess at what it will cover, used to answer "how much would reading this pull the
 estimate in?". It is the same class of object as the add-next list in

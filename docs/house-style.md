@@ -148,6 +148,30 @@ had two blank lines before its ❌/✅ pair and none before its citation.
 - **~12 lines per message.** Past that it is two topics, or the overflow belongs
   in the thread — which §6.7 already says.
 
+### Enumerations are lists
+
+Three or more parallel named items go **one per line**. Never inside a sentence.
+
+This shipped on 11 Sep, and it is the shape to recognise:
+
+> The six elements — security foundations, detection and response, automated
+> defenses, platform controls, feedback loops, business context — are
+> "explicitly not a sequence."
+
+Six things the reader is meant to be able to recall, buried in a clause they
+have to parse to count. The material itself lists them as six headings; the
+digest flattened what the page had already structured.
+
+- Two items are a sentence, or the ❌/✅ pair (§6.5).
+- A list that is really a comparison is a table or a `compare` visual (§8).
+- Where the cached page already breaks the items out, follow it — the structure
+  is part of what §2 means by writing in the material's own terms.
+
+`validate.py` fails on **five or more** short items run into a sentence, and
+warns at three or four behind a stated count. The rule is written at three and
+enforced at five because a gate that fails on the arguable case gets argued
+with, and then ignored.
+
 ## 6. Attention rules
 
 1. **⏱ cost on the header line, once per message** (`⏱ 90s`). The reader always
@@ -185,6 +209,47 @@ the heading verbatim — it's ⌘F-able. The heading text must match
 `knowledge/index.json` character for character; validate.py checks this.
 
 Never cite a section whose `ingested` flag is false.
+
+### Say where on the page, not just which page
+
+A page is 200 lines. A citation that stops at the page leaves the reader
+hunting, and they are reading this on a phone between meetings. Add one line
+under the link naming the sub-heading to jump to and what to read when they get
+there:
+
+```
+<https://app.notion.com/p/<page-id>|Module 3 → "01 — Virtual private cloud networking">
+On the page: _Example: subnets spanning zones_ — the CIDR/zones table.
+```
+
+- The sub-heading is quoted **verbatim** from the cached page and _italicised_ —
+  not `monospace`, which §5 reserves for things to recall exactly. A navigation
+  aid is not an exam fact. Same reasoning as the no-backticks rule above.
+- What to look for names a **concrete artifact** on the page — the table, the
+  ⚠️ callout, the numbered list, a phrase to ⌘F — never a restatement of the
+  topic you just wrote.
+- One line, and it spends no emoji.
+- **Omit it** when the section has no sub-headings. Five of the thirty ingested
+  sections are flat; for those the page-level citation alone is correct.
+
+`scripts/page_sections.py` lists a section's sub-headings, and `validate.py`
+fails a locator that points at one the page does not have.
+
+### A reference to a question is a link
+
+Slack *does* expose per-message permalinks, and every quiz question is its own
+top-level message. So "Q8", on its own, asks the reader to scroll back through a
+day of channel history to find out what they are being corrected about:
+
+```
+<permalink|Q8 · 10 Sep> asked whether SAIF's six elements are a sequence.
+You picked _"in order, gating deployment on each"_.
+```
+
+The recap is the load-bearing half and the link is the convenience — when the
+question predates recorded timestamps, cite it as `Q8 · 10 Sep` unlinked rather
+than dropping the reference. Never hand-assemble the URL: `scripts/slack_links.py`
+builds it from the `message_ts` the ledger already carries.
 
 ## 8. Visuals
 

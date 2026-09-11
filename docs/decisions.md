@@ -588,3 +588,148 @@ Chrome dependency in an unattended 21:15 job.
 The trend lives on the dashboard instead, as inline SVG. Revisit at six weekly
 data points, when a sparkline in the message itself becomes the first thing
 mrkdwn genuinely cannot say.
+
+---
+
+## The digest mix is a quota, not a priority order
+
+**Found:** 2026-09-11, by reading a digest that had gone out that morning.
+
+Three of its four topics were remediation on the previous night's misses. That
+was not bad luck: `remediation` had `priority: 0`, and the selector ran the
+remediation phase first and **unbounded** up to `topics_per_digest`. A quiz with
+four misses would have produced a digest with no new material in it at all — and
+since every digest feeds the next quiz, a bad day could keep the system circling
+two headings indefinitely.
+
+Priority order was the wrong shape for the problem. Misses are the most valuable
+thing to revisit *and* the easiest thing to over-serve, and an ordering has no
+way to express "most valuable, up to a point". A quota does:
+
+```
+fresh 0-1 · remediation 0-2 · new 1+ · review 0+ · synthesis 0-1
+```
+
+`fresh` and `remediation` have **hard** ceilings — a fifth miss defers to
+tomorrow rather than being absorbed — because both are self-replenishing and
+would otherwise crowd everything else out forever. What does not fit is reported
+in `deferred` rather than dropped, and a floor that cannot be met is reported in
+`unfilled_floors` rather than padded around. "There is no new ground left" is
+something the digest should say, not something it should hide by finding a
+fourth way to explain the same section.
+
+Two details that only showed up in testing:
+
+- **`fresh` had to overlap `new`, not partition it.** With a strict partition, a
+  large sync makes every section fresh, `new` empties, its floor cannot be met,
+  and the digest collapses to the single topic the fresh cap allows. Bands
+  overlap; only the picks are exclusive.
+- **`new` ranks sections with a pending miss last.** Otherwise the `new` floor
+  takes the heaviest untaught section, which is often one carrying a miss, and
+  the remediation band loses the topic whose question most needed linking.
+
+`select_topics.py` also reads `state.local/mastery.json` for the first time. The
+spaced repetition the system already computed drove the quiz and never the
+digest, so "what do I need reminding on?" had no answer on this side at all. A
+section whose `next_due` is in the future is not eligible however long ago it was
+taught — the learner has demonstrably retained it, and staleness alone cannot
+tell that from neglect.
+
+---
+
+## The style gate had never run over a digest
+
+**Found:** 2026-09-11, while working out how a run-on list reached Slack.
+
+`validate.check_style` reads `state.local/history/<date>/digest.md`. Nothing had
+ever written one. `daily-digest/SKILL.md` had said so in plain text — "This was
+specified and never actually done" — for long enough that it read as a known
+limitation rather than an open bug. The no-argument glob matched zero files, the
+loop body never executed, and `validate.py` reported success.
+
+So the emoji budget, the blank-line rule, the line length and the message length
+were all unchecked over every digest ever posted. Two failures shipped the same
+morning: SAIF's six core elements run into one sentence, and a bare "Q8".
+
+Caching the posted text is now a **gate** in the Post sequence, ahead of the
+Notion mirror, and a `digest.json` with no sibling `digest.md` is an error from
+2026-09-12 on. Dated, because the two existing history entries have no cache and
+never will: without the cutover `validate.py` would go red on its own state and
+stay red, which is how a gate gets disabled.
+
+The delimiter changed at the same time. `_messages()` split on `---`, but house
+style §5 lists a horizontal rule as in-message typography — the first digest to
+use one would have been cut into two pseudo-messages, each with its own emoji
+budget, so the check would have *passed* a message that broke the rule the budget
+exists to enforce. The separator is now `---8<---`, which nothing else means.
+
+---
+
+## Enumerations, and why the gate fires at five
+
+**Found:** 2026-09-11, writing the check for the six-elements failure.
+
+The obvious heuristic — a comma run ending in "and" or "or" — does not match the
+sentence that prompted it:
+
+> The six elements — security foundations, detection and response, automated
+> defenses, platform controls, feedback loops, business context — are …
+
+There is no terminal conjunction, and one item ("detection and response")
+contains the word the pattern keys on. The signal that actually works is a run of
+short comma-separated noun phrases inside one clause, with the line split on
+dashes and colons first so the surrounding prose is not counted as an item.
+
+House style asks for a list at **three** items. The gate fails at **five**, and
+warns at three or four behind a stated count. The gap is deliberate: four items
+behind a count is sometimes a chain that reads correctly inline ("Four levels,
+bottom up: resources, projects, folders, the organization node"), and a gate that
+fails on the arguable case gets argued with and then switched off. Five short
+items run into a sentence has no defence.
+
+---
+
+## A citation points at a place, not just a page
+
+**Found:** 2026-09-11, from the reader's own feedback on the links.
+
+The page-level citation was working — it was the most useful thing in the digest
+— but `Module 3 → "01 — Virtual private cloud networking"` is a 200-line page,
+and the reader still had to hunt. §7 already records why there is no deep link:
+the Notion API does not expose heading block ids.
+
+But the sub-headings were always available. The cached page text carries them,
+and the digest already opens that text for every section it teaches. So the
+locator is authored from the page in hand and checked against it, rather than
+precomputed into the index — which also sidesteps the fact that a cloud run
+hydrates only the pages it cites, so an index-wide table of sub-headings would be
+empty there.
+
+The parse is **level-relative**. Heading depth is not consistent across the
+material: the module pages put index headings at `#` with `##` children, while
+`introduction-to-security-in-the-world-of-ai-review` uses `##` with `###`. A
+parser fixed at `##` returns nothing for that page — and the failure is silent,
+because "no sub-headings" is a legitimate answer for the five ingested sections
+that genuinely have none.
+
+---
+
+## Q8 was always linkable
+
+**Found:** 2026-09-11, checking what the quiz already records.
+
+Every quiz question is posted as its own top-level Slack message — a decision
+made for a different reason (threads are flat, so a hint could not be collapsed
+under a question that was itself a reply) — and `message_ts` has been recorded
+per question since the first quiz. Slack exposes per-message permalinks. The link
+was constructible from day one and nothing built one, so a remediation topic said
+"Q8" and left the reader to scroll back through a day of channel history.
+
+The ts → permalink transform lives in `scripts/slack_links.py` rather than in the
+prompt: dropping the dot and prefixing `p` is exactly the kind of rule that gets
+subtly wrong in a way nobody notices until a link lands on nothing. It returns
+`None` rather than a half-formed URL.
+
+The recap is the load-bearing half, not the link. History written before
+`message_ts` existed still gets "Q8 · 10 Sep" plus what the reader picked;
+`validate.py` warns there rather than failing, so old records stay valid.

@@ -80,6 +80,24 @@ def fingerprint(question: dict) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
+def miss_for_section(ledger: dict, key: str) -> tuple[str, dict] | tuple[None, None]:
+    """The (fingerprint, question) a section was most recently missed on.
+
+    Looked up over `questions` rather than cached on the section, because a
+    section can be quizzed before it is ever taught -- two of the three misses on
+    2026-09-10 were -- and `sections` holds only what a digest has taught. A
+    cached pointer there would be null exactly where remediation needs it.
+    """
+    best_fp, best = None, None
+    for fp, q in (ledger.get("questions") or {}).items():
+        if q.get("section") != key or not q.get("last_miss"):
+            continue
+        if best is None or (q["last_miss"].get("date") or "") >= (
+                best["last_miss"].get("date") or ""):
+            best_fp, best = fp, q
+    return (best_fp, best) if best else (None, None)
+
+
 def build() -> dict:
     sections: dict[str, dict] = {}
     questions: dict[str, dict] = {}
@@ -132,17 +150,37 @@ def build() -> dict:
         # ── asked questions, and their outcomes ────────────────────────────
         for quiz_file, results_file in quiz_sets(day_dir):
             quiz = json.loads(quiz_file.read_text())
+            channel_id = (quiz.get("slack") or {}).get("channel_id")
             for q in quiz.get("questions", []):
                 fp = fingerprint(q)
                 entry = questions.setdefault(fp, {
                     "blueprint": q.get("blueprint"),
                     "section": section_key(q.get("source") or {}),
                     "asked": [], "outcomes": [], "retested": False,
+                    # Carried so a digest can recap and LINK the question it is
+                    # remediating instead of saying "Q8". Written as null rather
+                    # than omitted when history predates a field, so every
+                    # consumer sees the same keys and degrades the same way.
+                    "stem": None, "scenario": None, "options": None,
+                    "occurrences": [], "last_miss": None,
                 })
+                entry["stem"] = q.get("stem") or entry.get("stem")
+                entry["scenario"] = q.get("scenario") or entry.get("scenario")
+                entry["options"] = q.get("options") or entry.get("options")
                 if date not in entry["asked"]:
                     entry["asked"].append(date)
                 if q.get("is_retest"):
                     entry["retested"] = True
+                # One occurrence per (date, set): the same question asked again
+                # on another day is a second occurrence, not an overwrite.
+                where = {"date": date, "set": quiz_file.name, "n": q.get("n"),
+                         "channel_id": channel_id,
+                         "message_ts": q.get("message_ts"),
+                         "outcome": None, "hint_used": None,
+                         "answered": None, "keyed": None}
+                if not any(o["date"] == date and o["set"] == quiz_file.name
+                           and o["n"] == q.get("n") for o in entry["occurrences"]):
+                    entry["occurrences"].append(where)
 
             if not results_file.exists():
                 continue
@@ -150,8 +188,25 @@ def build() -> dict:
             by_n = {q.get("n"): fingerprint(q) for q in quiz.get("questions", [])}
             for graded in results.get("questions", []):
                 fp = by_n.get(graded.get("n"))
-                if fp and fp in questions:
-                    questions[fp]["outcomes"].append(graded.get("outcome", "unknown"))
+                if not (fp and fp in questions):
+                    continue
+                outcome = graded.get("outcome", "unknown")
+                entry = questions[fp]
+                entry["outcomes"].append(outcome)
+                occ = next((o for o in entry["occurrences"]
+                            if o["date"] == date and o["set"] == quiz_file.name
+                            and o["n"] == graded.get("n")), None)
+                if occ is None:
+                    continue
+                occ["outcome"] = outcome
+                occ["hint_used"] = graded.get("hint_used")
+                occ["answered"] = graded.get("answered")
+                occ["keyed"] = graded.get("keyed")
+                # The MOST RECENT miss, not the first: a digest remediating a
+                # section should recap the answer the reader actually gave last
+                # time, not one they may have since corrected.
+                if outcome == "wrong":
+                    entry["last_miss"] = occ
 
     return {
         # relative_to fails when HISTORY is redirected (tests inject a tmpdir),

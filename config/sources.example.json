@@ -1,6 +1,6 @@
 {
   "_note": "Shape of knowledge/sources.local.json, which is gitignored because it describes a private Notion workspace. The sync-notion skill writes the real one.",
-  "_ingested_on": "Date a page was first read, written once by sync-notion and never rewritten. It is what lets the readiness estimate measure how fast you are actually getting through the course; without it the coverage rate is unknowable and the estimate refuses. Pages ingested before this field existed keep null, meaning 'before the measurement window' -- they set the level of coverage but not the rate.",
+  "_ingested_on": "Date a page -- or an individual section -- was first read, written once by sync-notion and never rewritten. A section added to an already-ingested page carries its own stamp, because the page's is old and the digest's `fresh` band would never reach the new material otherwise. It is what lets the readiness estimate measure how fast you are actually getting through the course; without it the coverage rate is unknowable and the estimate refuses. Pages ingested before this field existed keep null, meaning 'before the measurement window' -- they set the level of coverage but not the rate.",
   "_cache": "Path under knowledge/ holding the page's prose, written by sync-notion when it reads the page. It is what digest and quiz actually write from -- without it they compose from a heading plus general GCP knowledge, which reads synthetic and weakens rule 2. A page with ingested=true and no cache is a claim with no evidence, and validate.py warns.",
   "_expected_exam_tags": "Planning-only guess at what an un-ingested page will cover, used to answer 'how much would ingesting this pull the estimate in?'. Same class of object as coverage.md's add-next list: NEVER citable and never teachable, and excluded from coverage by construction, which is what keeps CLAUDE.md rule 3 intact.",
   "root": {
@@ -31,6 +31,7 @@
             "sections": [
               {
                 "heading": "<exact heading text, character for character>",
+                "ingested_on": "2026-09-10",
                 "exam_tags": ["1.4"],
                 "services": ["IAM"],
                 "note": "optional; NOT-YET-COVERED: ... for planning signal only"
